@@ -11,8 +11,6 @@ import { useConfigStore } from "../../../../stores/configStore";
 import { useDebugStore } from "../../../../stores/debugStore";
 import { NodeTypeEnum } from "../constants";
 import { ModernContent } from "./ModernContent";
-import { ClassicContent } from "./ClassicContent";
-import { MinimalContent } from "./MinimalContent";
 import { useShallow } from "zustand/shallow";
 import { NodeContextMenu } from "../components/NodeContextMenu";
 
@@ -148,16 +146,9 @@ export function PipelineNode(props: NodeProps<PNodeData>) {
     return { opacity: focusOpacity };
   }, [isRelated, focusOpacity]);
 
-  // 渲染内容组件
+  // 渲染内容组件 - OneDragon 格式统一使用 Modern 样式
   const renderContent = () => {
-    switch (nodeStyle) {
-      case "minimal":
-        return <MinimalContent data={props.data} props={props} />;
-      case "modern":
-        return <ModernContent data={props.data} props={props} />;
-      default:
-        return <ClassicContent data={props.data} props={props} />;
-    }
+    return <ModernContent data={props.data} props={props} />;
   };
 
   if (!node) {
@@ -191,51 +182,42 @@ export const PipelineNodeMemo = memo(PipelineNode, (prev, next) => {
     return false;
   }
 
-  // 比较 data
+  // 比较 data - OneDragon 格式
   const prevData = prev.data;
   const nextData = next.data;
-  if (prevData.label !== nextData.label) {
-    return false;
-  }
-
-  if (prevData.recognition.type !== nextData.recognition.type) {
-    return false;
-  }
-  try {
-    if (
-      JSON.stringify(prevData.recognition.param) !==
-      JSON.stringify(nextData.recognition.param)
-    ) {
-      return false;
-    }
-  } catch {
-    if (prevData.recognition.param !== nextData.recognition.param) {
-      return false;
-    }
-  }
-
-  if (prevData.action.type !== nextData.action.type) {
-    return false;
-  }
-  try {
-    if (
-      JSON.stringify(prevData.action.param) !==
-      JSON.stringify(nextData.action.param)
-    ) {
-      return false;
-    }
-  } catch {
-    if (prevData.action.param !== nextData.action.param) {
-      return false;
-    }
-  }
-
+  
   if (
-    prevData.others !== nextData.others ||
-    prevData.extras !== nextData.extras ||
+    prevData.label !== nextData.label ||
+    prevData.methodName !== nextData.methodName ||
+    prevData.isStartNode !== nextData.isStartNode ||
+    prevData.saveStatus !== nextData.saveStatus ||
+    prevData.code !== nextData.code ||
+    prevData.comment !== nextData.comment ||
     prevData.handleDirection !== nextData.handleDirection
   ) {
     return false;
+  }
+
+  // 比较 nodeFrom 数组
+  try {
+    if (JSON.stringify(prevData.nodeFrom) !== JSON.stringify(nextData.nodeFrom)) {
+      return false;
+    }
+  } catch {
+    if (prevData.nodeFrom !== nextData.nodeFrom) {
+      return false;
+    }
+  }
+
+  // 比较 nodeNotify 数组
+  try {
+    if (JSON.stringify(prevData.nodeNotify) !== JSON.stringify(nextData.nodeNotify)) {
+      return false;
+    }
+  } catch {
+    if (prevData.nodeNotify !== nextData.nodeNotify) {
+      return false;
+    }
   }
 
   return true;

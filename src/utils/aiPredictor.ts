@@ -1,7 +1,6 @@
 import { OpenAIChat } from "./openai";
 import type { NodeType, EdgeType, PipelineNodeType } from "../stores/flow";
 import {
-  SourceHandleTypeEnum,
   TargetHandleTypeEnum,
 } from "../components/flow/nodes";
 import { useMFWStore } from "../stores/mfwStore";
@@ -20,12 +19,18 @@ import {
 export type ProgressCallback = (stage: string, detail?: string) => void;
 
 /**
- * 节点上下文信息接口
+ * 节点上下文信息接口 - OneDragon 格式
  */
 export interface NodeContext {
   currentNode: {
     id: string;
     label: string;
+    // OneDragon 格式字段
+    methodName?: string;
+    isStartNode?: boolean;
+    nodeFrom?: any[];
+    code?: string;
+    // 兼容旧格式
     recognition: {
       type: string;
       param: Record<string, any>;
@@ -94,13 +99,17 @@ export async function collectNodeContext(
     throw new Error("节点不存在");
   }
 
-  // 收集当前节点信息
+  // 收集当前节点信息 - OneDragon 格式
   const context: NodeContext = {
     currentNode: {
       id: currentNode.id,
       label: currentNode.data.label || "",
-      recognition: currentNode.data.recognition || null,
-      action: currentNode.data.action || null,
+      recognition: null,
+      action: null,
+      // OneDragon 扩展信息
+      methodName: currentNode.data.methodName,
+      isStartNode: currentNode.data.isStartNode,
+      nodeFrom: currentNode.data.nodeFrom,
     },
     precedingNodes: [],
     ocrResult: null,
@@ -115,40 +124,26 @@ export async function collectNodeContext(
       | undefined;
     if (!precedingNode) continue;
 
-    // 确定连接类型
-    let connectionType: "next" | "jump_back" | "on_error";
-    switch (edge.sourceHandle) {
-      case SourceHandleTypeEnum.Next:
-        connectionType =
-          edge.targetHandle === TargetHandleTypeEnum.JumpBack
-            ? "jump_back"
-            : "next";
-        break;
-      case SourceHandleTypeEnum.Error:
-        connectionType = "on_error";
-        break;
-      default:
-        continue;
+    // 确定连接类型 - OneDragon 风格
+    let connectionType: "next" | "jump_back" | "on_error" = "next";
+    const edgeCondition = edge.attributes?.condition;
+    if (edgeCondition === "fail") {
+      connectionType = "on_error";
+    } else if (edge.targetHandle === TargetHandleTypeEnum.JumpBack) {
+      connectionType = "jump_back";
     }
 
-    // 提取关键参数
+    // OneDragon 格式简化参数
     const keyParams: Record<string, any> = {};
-    if (precedingNode.data.recognition?.param) {
-      const param = precedingNode.data.recognition.param;
-      // 只提取关键字段
-      if (param.expected) keyParams.expected = param.expected;
-      if (param.template)
-        keyParams.template = Array.isArray(param.template)
-          ? param.template.slice(0, 3)
-          : param.template;
-      if (param.roi) keyParams.roi = param.roi;
+    if (precedingNode.data.code) {
+      keyParams.code = precedingNode.data.code.substring(0, 100);
     }
 
     context.precedingNodes.push({
       label: precedingNode.data.label || "",
       connectionType,
-      recognition: precedingNode.data.recognition?.type || "未设置",
-      action: precedingNode.data.action?.type || "未设置",
+      recognition: "OneDragon",
+      action: precedingNode.data.methodName || "未设置",
       keyParams,
     });
   }

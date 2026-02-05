@@ -1,243 +1,161 @@
-import { memo, useMemo, useRef, useEffect, useState } from "react";
+import { memo, useMemo, useRef, useEffect } from "react";
 import { type NodeProps } from "@xyflow/react";
-import classNames from "classnames";
 
 import style from "../../../../styles/nodes.module.less";
 import type { PipelineNodeDataType } from "../../../../stores/flow";
-import { useConfigStore } from "../../../../stores/configStore";
-import IconFont from "../../../iconfonts";
-import { KVElem } from "../components/KVElem";
-import { PipelineNodeHandles } from "../components/NodeHandles";
-import { NodeTemplateImages } from "../components/NodeTemplateImages";
-import { getRecognitionIcon, getActionIcon, getNodeTypeIcon } from "../utils";
-import { JsonHelper } from "../../../../utils/jsonHelper";
-import { otherFieldSchema } from "../../../../core/fields/other/schema";
+import IconFont, { type IconNames } from "../../../iconfonts";
+import { OneDragonNodeHandles } from "../components/OneDragonNodeHandles";
 
-// focus 子项 key 到 displayName 的映射
-const focusDisplayNameMap: Record<string, string> = (() => {
-  const map: Record<string, string> = {};
-  if (otherFieldSchema.focus.params) {
-    for (const param of otherFieldSchema.focus.params) {
-      if (param.displayName) {
-        map[param.key] = param.displayName;
-      }
-    }
-  }
-  return map;
-})();
-
-/**现代风格Pipeline节点内容 */
+/**
+ * OneDragon 节点的现代风格内容组件
+ */
 export const ModernContent = memo(
   ({ data }: { data: PipelineNodeDataType; props: NodeProps }) => {
     const headerRef = useRef<HTMLDivElement>(null);
-    const [headerHeight, setHeaderHeight] = useState(0);
-    
-    // 是否显示节点模板图片
-    const showNodeTemplateImages = useConfigStore(
-      (state) => state.configs.showNodeTemplateImages
-    );
 
     useEffect(() => {
       if (headerRef.current) {
-        const height = headerRef.current.offsetHeight;
-        setHeaderHeight(height);
+        headerRef.current.offsetHeight;
       }
     }, [data.label]);
 
-    const ExtrasElem = useMemo(() => {
-      if (JsonHelper.isObj(data.extras)) {
-        return Object.keys(data.extras).map((key) => (
-          <KVElem key={key} paramKey={key} value={data.extras[key]} />
-        ));
+    // 获取节点图标
+    const nodeIcon = useMemo<{ name: IconNames; size: number; color: string }>(() => {
+      if (data.isStartNode) {
+        return { name: "icon-kaishi", size: 16, color: "#52c41a" };
       }
-      const extras = JsonHelper.stringObjToJson(data.extras);
-      if (extras) {
-        return Object.keys(extras).map((key) => (
-          <KVElem key={key} paramKey={key} value={extras[key]} />
-        ));
+      if (data.saveStatus) {
+        return { name: "icon-beifen", size: 16, color: "#1890ff" };
       }
-      return null;
-    }, [data.extras]);
-
-    // 过滤空的 focus 字段，并将 focus 对象拆分为子项
-    const { filteredOthers, focusItems } = useMemo(() => {
-      const others = { ...data.others };
-      let focusItems: { key: string; value: any }[] = [];
-
-      if ("focus" in others) {
-        const focus = others.focus;
-        // 空值检测
-        if (
-          focus === "" ||
-          focus === null ||
-          focus === undefined ||
-          (typeof focus === "object" &&
-            focus !== null &&
-            Object.keys(focus).length === 0)
-        ) {
-          delete others.focus;
-        } else if (typeof focus === "object" && focus !== null) {
-          // 使用 displayName 缩写
-          focusItems = Object.keys(focus).map((subKey) => ({
-            key: focusDisplayNameMap[subKey] || subKey,
-            value: focus[subKey],
-          }));
-          delete others.focus;
-        }
+      if (data.nodeNotify && data.nodeNotify.length > 0) {
+        return { name: "icon-rizhi", size: 16, color: "#faad14" };
       }
+      return { name: "icon-m_act", size: 16, color: "#666" };
+    }, [data.isStartNode, data.saveStatus, data.nodeNotify]);
 
-      return { filteredOthers: others, focusItems };
-    }, [data.others]);
+    // 节点来源数量
+    const fromCount = data.nodeFrom?.length || 0;
 
-    const recoIconConfig = useMemo(
-      () => getRecognitionIcon(data.recognition.type),
-      [data.recognition.type]
-    );
-    const actionIconConfig = useMemo(
-      () => getActionIcon(data.action.type),
-      [data.action.type]
-    );
-    const nodeTypeIconConfig = useMemo(() => getNodeTypeIcon("pipeline"), []);
-
-    const hasRecoParams = useMemo(
-      () => Object.keys(data.recognition.param).length > 0,
-      [data.recognition.param]
-    );
-    const hasActionParams = useMemo(
-      () => Object.keys(data.action.param).length > 0,
-      [data.action.param]
-    );
-    const hasOtherParams = useMemo(
-      () =>
-        Object.keys(filteredOthers).length > 0 ||
-        focusItems.length > 0 ||
-        (ExtrasElem && ExtrasElem.length > 0),
-      [filteredOthers, focusItems, ExtrasElem]
-    );
-
-    // 提取 template 路径列表
-    const templatePaths = useMemo(() => {
-      const template = data.recognition.param?.template as unknown;
-      if (!template) return [];
-      if (Array.isArray(template)) {
-        return template.filter((p): p is string => typeof p === "string" && p.trim() !== "");
-      }
-      if (typeof template === "string" && template.trim() !== "") {
-        return [template];
-      }
-      return [];
-    }, [data.recognition.param]);
+    // 是否有通知
+    const hasNotify = data.nodeNotify && data.nodeNotify.length > 0;
 
     return (
       <>
         {/* 顶部区域 */}
         <div ref={headerRef} className={style.modernHeader}>
           <div className={style.headerLeft}>
-            <span title="Pipeline节点">
+            <span title={data.isStartNode ? "起始节点" : "操作节点"}>
               <IconFont
                 className={style.typeIcon}
-                name={nodeTypeIconConfig.name}
-                size={nodeTypeIconConfig.size}
+                name={nodeIcon.name}
+                size={nodeIcon.size}
+                style={{ color: nodeIcon.color }}
               />
             </span>
           </div>
           <div className={style.headerTitle}>{data.label}</div>
           <div className={style.headerRight}>
+            {data.isStartNode && (
+              <span className={`${style.badge} ${style.badgeStart}`}>
+                起始
+              </span>
+            )}
+            {data.saveStatus && (
+              <span className={`${style.badge} ${style.badgeSave}`}>
+                保存
+              </span>
+            )}
             <div className={style.moreBtn}>
               <IconFont name="icon-gengduo" size={14} />
             </div>
           </div>
         </div>
 
-        {/* 字段区域 */}
+        {/* 内容区域 */}
         <div className={style.modernContent}>
-          {/* 识别区域 */}
-          <div className={style.section}>
-            <div className={classNames(style.sectionHeader, style.recoHeader)}>
-              {recoIconConfig.name && (
-                <IconFont
-                  name={recoIconConfig.name}
-                  size={recoIconConfig.size}
-                />
-              )}
-              <span>识别 - {data.recognition.type}</span>
-            </div>
-            {hasRecoParams && (
-              <ul className={style.sectionList}>
-                {Object.keys(data.recognition.param).map((key) => (
-                  <KVElem
-                    key={key}
-                    paramKey={key}
-                    value={data.recognition.param[key]}
-                  />
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {/* 动作区域 */}
-          <div className={style.section}>
-            <div
-              className={classNames(style.sectionHeader, style.actionHeader)}
-            >
-              {actionIconConfig.name && (
-                <IconFont
-                  name={actionIconConfig.name}
-                  size={actionIconConfig.size}
-                />
-              )}
-              <span>动作 - {data.action.type}</span>
-            </div>
-            {hasActionParams && (
-              <ul className={style.sectionList}>
-                {Object.keys(data.action.param).map((key) => (
-                  <KVElem
-                    key={key}
-                    paramKey={key}
-                    value={data.action.param[key]}
-                  />
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {/* 其他区域 */}
-          {hasOtherParams && (
-            <div className={style.section}>
-              <div
-                className={classNames(style.sectionHeader, style.otherHeader)}
-              >
-                <IconFont name="icon-zidingyi" size={12} />
-                <span>其他</span>
+          {/* 方法名 */}
+          {data.methodName && (
+            <div className={style.modernSection}>
+              <div className={style.sectionHeader}>
+                <IconFont name="icon-daima" size={14} />
+                <span>方法</span>
               </div>
-              <ul className={style.sectionList}>
-                {Object.keys(filteredOthers).map((key) => (
-                  <KVElem
-                    key={key}
-                    paramKey={key}
-                    value={filteredOthers[key]}
-                  />
+              <div className={style.sectionContent}>
+                <code className={style.methodName}>{data.methodName}</code>
+              </div>
+            </div>
+          )}
+
+          {/* 来源连接信息 */}
+          {fromCount > 0 && (
+            <div className={style.modernSection}>
+              <div className={style.sectionHeader}>
+                <IconFont name="icon-lianjie" size={14} />
+                <span>来源 ({fromCount})</span>
+              </div>
+              <div className={style.sectionContent}>
+                {data.nodeFrom?.slice(0, 3).map((from, index) => (
+                  <div key={index} className={style.fromItem}>
+                    <span className={style.fromName}>{from.from_name}</span>
+                    {from.success !== undefined && (
+                      <span
+                        className={style.fromCondition}
+                        style={{ color: from.success ? "#52c41a" : "#ff4d4f" }}
+                      >
+                        {from.success ? "成功" : "失败"}
+                      </span>
+                    )}
+                    {from.status && (
+                      <span className={style.fromStatus}>
+                        {from.status}
+                      </span>
+                    )}
+                  </div>
                 ))}
-                {focusItems.map((item) => (
-                  <KVElem
-                    key={item.key}
-                    paramKey={item.key}
-                    value={item.value}
-                  />
+                {fromCount > 3 && (
+                  <div className={style.moreItems}>+{fromCount - 3} 更多...</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 通知信息 */}
+          {hasNotify && (
+            <div className={style.modernSection}>
+              <div className={style.sectionHeader}>
+                <IconFont name="icon-rizhi" size={14} />
+                <span>通知</span>
+              </div>
+              <div className={style.sectionContent}>
+                {data.nodeNotify?.map((notify, index) => (
+                  <div key={index} className={style.notifyItem}>
+                    <span>{notify.when}</span>
+                    {notify.detail && <span className={style.detailBadge}>详情</span>}
+                  </div>
                 ))}
-                {ExtrasElem}
-              </ul>
+              </div>
+            </div>
+          )}
+
+          {/* 注释 */}
+          {data.comment && (
+            <div className={style.modernSection}>
+              <div className={style.sectionHeader}>
+                <IconFont name="icon-xiaohongshubiaoti" size={14} />
+                <span>注释</span>
+              </div>
+              <div className={style.sectionContent}>
+                <div className={style.commentText}>{data.comment}</div>
+              </div>
             </div>
           )}
         </div>
 
-        {/* 模板图片区域 */}
-        {showNodeTemplateImages && templatePaths.length > 0 && (
-          <NodeTemplateImages templatePaths={templatePaths} />
-        )}
-
-        <PipelineNodeHandles direction={data.handleDirection} />
+        {/* Handle 连接点 */}
+        <OneDragonNodeHandles handleDirection={data.handleDirection} />
       </>
     );
   }
 );
+
+ModernContent.displayName = "ModernContent";

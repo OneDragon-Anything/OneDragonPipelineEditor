@@ -27,6 +27,15 @@ export {
   waitFreezesFields,
 } from "./other/index.js";
 
+// OneDragon 字段
+export {
+  oneDragonFieldSchema,
+  nodeFromFieldSchema,
+  nodeNotifyFieldSchema,
+  oneDragonNodeFields,
+  oneDragonFieldSchemaKeyList,
+} from "./onedragon/index.js";
+
 // 工具函数
 export { generateParamKeys, generateUpperValues } from "./utils.js";
 

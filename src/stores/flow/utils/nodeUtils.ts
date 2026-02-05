@@ -7,7 +7,7 @@ import type {
 } from "../types";
 import { NodeTypeEnum } from "../../../components/flow/nodes";
 
-// 创建 Pipeline 节点
+// 创建 OneDragon Pipeline 节点
 export function createPipelineNode(
   id: string,
   options?: {
@@ -32,17 +32,15 @@ export function createPipelineNode(
     type: NodeTypeEnum.Pipeline,
     data: {
       label,
-      recognition: {
-        type: "DirectHit",
-        param: {},
-      },
-      action: {
-        type: "DoNothing",
-        param: {},
-      },
-      others: {},
-      extras: {},
-      ...templateData,
+      // OneDragon 风格的默认值
+      methodName: templateData.methodName || label.toLowerCase().replace(/\s+/g, "_"),
+      isStartNode: templateData.isStartNode || false,
+      saveStatus: templateData.saveStatus || false,
+      nodeFrom: templateData.nodeFrom || [],
+      nodeNotify: templateData.nodeNotify || [],
+      code: templateData.code || "return self.round_success()",
+      comment: templateData.comment || "",
+      handleDirection: templateData.handleDirection,
     },
     position,
     selected: select,

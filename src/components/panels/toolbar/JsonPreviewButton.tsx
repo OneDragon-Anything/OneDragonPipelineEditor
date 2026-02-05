@@ -5,10 +5,10 @@ import { useToolbarStore } from "../../../stores/toolbarStore";
 import style from "../../../styles/ToolbarPanel.module.less";
 
 /**
- * JSON预览按钮组件
- * 控制JSON浮动面板的显示/隐藏,支持编译预览
+ * Python 代码预览按钮组件
+ * 控制 Python 代码浮动面板的显示/隐藏
  */
-function JsonPreviewButton() {
+function PythonPreviewButton() {
   const { jsonPanelVisible, toggleJsonPanel } = useToolbarStore();
 
   // 点击按钮切换面板显示状态
@@ -24,9 +24,9 @@ function JsonPreviewButton() {
         jsonPanelVisible ? style.active : ""
       }`}
     >
-      JSON 预览
+      Python 预览
     </Button>
   );
 }
 
-export default memo(JsonPreviewButton);
+export default memo(PythonPreviewButton);

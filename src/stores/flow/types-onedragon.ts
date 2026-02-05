@@ -5,11 +5,7 @@ import type {
   EdgeChange,
   Connection,
 } from "@xyflow/react";
-import {
-  NodeTypeEnum,
-  SourceHandleTypeEnum,
-  TargetHandleTypeEnum,
-} from "../../components/flow/nodes";
+import { NodeTypeEnum, SourceHandleTypeEnum, TargetHandleTypeEnum } from "../../components/flow/nodes";
 import type { HandleDirection } from "../../components/flow/nodes/constants";
 
 // 位置类型
@@ -38,17 +34,26 @@ export type EdgeAttributesType = {
 // 边类型
 export type EdgeType = {
   id: string;
-  source: string;
+  source: string;                      // 源节点 ID
   sourceHandle: SourceHandleTypeEnum;
-  target: string;
+  target: string;                      // 目标节点 ID
   targetHandle: TargetHandleTypeEnum;
-  label?: string | number;
+  label?: string | number;             // 边的标签
   type: "marked";
   selected?: boolean;
   attributes?: EdgeAttributesType;
 };
 
 // ========== OneDragon 节点属性类型 ==========
+
+/**
+ * @operation_node 装饰器参数
+ */
+export type OperationNodeParams = {
+  name: string;                   // 节点名称
+  is_start_node?: boolean;        // 是否为起始节点
+  save_status?: boolean;          // 是否保存状态
+};
 
 /**
  * @node_from 装饰器参数 - 定义来源连接
@@ -67,75 +72,8 @@ export type NodeNotifyParams = {
   detail?: boolean;               // 是否包含详情
 };
 
-// XYWH 坐标类型
-type XYWH = [number, number, number, number];
-
-// 识别参数类型 (保留用于兼容)
-export type RecognitionParamType = {
-  roi?: XYWH | string;
-  roi_offset?: XYWH;
-  template?: string[];
-  threshold?: number[];
-  order_by?: string;
-  index?: number;
-  method?: number;
-  green_mask?: boolean;
-  count?: number;
-  detector?: string;
-  ratio?: number;
-  lower?: number[][];
-  upper?: number[][];
-  connected?: boolean;
-  expected?: string[] | number[];
-  replace?: [string, string][];
-  only_rec?: boolean;
-  model?: string;
-  labels?: string[];
-  custom_recognition?: string;
-  custom_recognition_param?: any;
-  [key: string]: any;
-};
-
-// 动作参数类型 (保留用于兼容)
-export type ActionParamType = {
-  target?: XYWH | boolean | string;
-  target_offset?: XYWH;
-  duration?: number;
-  begin?: XYWH;
-  begin_offset?: XYWH;
-  end?: XYWH;
-  end_offset?: XYWH;
-  swipes?: any[];
-  key?: number;
-  input_text?: string;
-  package?: string;
-  exec?: string;
-  args?: string[];
-  detach?: boolean;
-  custom_action?: string;
-  custom_action_param?: any;
-  [key: string]: any;
-};
-
-// 其他参数类型 (保留用于兼容)
-export type OtherParamType = {
-  rate_limit?: number;
-  timeout?: number;
-  inverse?: boolean;
-  enabled?: boolean;
-  pre_delay?: number;
-  post_delay?: number;
-  pre_wait_freezes?: any;
-  postWaitFreezes?: any;
-  focus?: any;
-  [key: string]: any;
-};
-
-// 参数合并类型
-export type ParamType = RecognitionParamType & ActionParamType & OtherParamType;
-
-// OneDragon Pipeline 节点数据类型
-export type PipelineNodeDataType = {
+// OneDragon 节点数据类型
+export type OneDragonNodeDataType = {
   label: string;                           // 节点名称 (对应 @operation_node 的 name)
   methodName: string;                      // Python 方法名
   isStartNode?: boolean;                   // 是否为起始节点
@@ -146,10 +84,9 @@ export type PipelineNodeDataType = {
   comment?: string;                        // 节点注释/描述
   code?: string;                           // 方法体代码
   handleDirection?: HandleDirection;       // 端点方向
-  type?: NodeTypeEnum;
 };
 
-// External 节点数据类型
+// External 节点数据类型 (保留用于外部引用)
 export type ExternalNodeDataType = {
   label: string;
   handleDirection?: HandleDirection;
@@ -161,11 +98,11 @@ export type AnchorNodeDataType = {
   handleDirection?: HandleDirection;
 };
 
-// Pipeline 节点类型
-export interface PipelineNodeType {
+// OneDragon Pipeline 节点类型
+export interface OneDragonNodeType {
   id: string;
   type: NodeTypeEnum;
-  data: PipelineNodeDataType;
+  data: OneDragonNodeDataType;
   position: PositionType;
   dragging?: boolean;
   selected?: boolean;
@@ -204,7 +141,33 @@ export interface AnchorNodeType {
 }
 
 // 节点联合类型
-export type NodeType = PipelineNodeType | ExternalNodeType | AnchorNodeType;
+export type NodeType = OneDragonNodeType | ExternalNodeType | AnchorNodeType;
+
+// ========== 解析相关类型 ==========
+
+/**
+ * 解析后的 OneDragon 类信息
+ */
+export type ParsedOneDragonClass = {
+  className: string;                      // 类名
+  baseClass?: string;                     // 基类名
+  imports: string[];                      // 导入语句
+  classVars: Record<string, string>;      // 类变量 (如 STATUS_NO_PLAN)
+  initCode?: string;                      // __init__ 方法代码
+  nodes: ParsedOneDragonNode[];           // 解析的节点列表
+};
+
+/**
+ * 解析后的 OneDragon 节点
+ */
+export type ParsedOneDragonNode = {
+  methodName: string;                     // 方法名
+  operationNode: OperationNodeParams;     // @operation_node 参数
+  nodeFromList: NodeFromParams[];         // @node_from 参数列表
+  nodeNotifyList?: NodeNotifyParams[];    // @node_notify 参数列表
+  code: string;                           // 方法体代码
+  docstring?: string;                     // 文档字符串
+};
 
 // ========== Slice 状态类型定义 ==========
 
@@ -274,7 +237,7 @@ export interface FlowEdgeState {
   edgeControlResetKey: number;
   updateEdges: (changes: EdgeChange[]) => void;
   setEdgeData: (id: string, key: string, value: any) => void;
-  setEdgeLabel: (id: string, newLabel: number) => void;
+  setEdgeLabel: (id: string, newLabel: string | number) => void;
   addEdge: (co: Connection, options?: { isCheck?: boolean }) => void;
   setEdges: (edges: EdgeType[]) => void;
   resetEdgeControls: () => void;
@@ -299,16 +262,16 @@ export interface FlowGraphState {
 
 // 路径 Slice 状态
 export interface FlowPathState {
-  pathMode: boolean; // 是否开启路径模式
-  pathStartNodeId: string | null; // 起始节点ID
-  pathEndNodeId: string | null; // 结束节点ID
-  pathNodeIds: Set<string>; // 路径上的节点ID集合
-  pathEdgeIds: Set<string>; // 路径上的边ID集合
+  pathMode: boolean;
+  pathStartNodeId: string | null;
+  pathEndNodeId: string | null;
+  pathNodeIds: Set<string>;
+  pathEdgeIds: Set<string>;
   setPathMode: (enabled: boolean) => void;
   setPathStartNode: (nodeId: string | null) => void;
   setPathEndNode: (nodeId: string | null) => void;
-  calculatePath: () => void; // 计算路径
-  clearPath: () => void; // 清除路径
+  calculatePath: () => void;
+  clearPath: () => void;
 }
 
 // 合并的 Flow Store 类型

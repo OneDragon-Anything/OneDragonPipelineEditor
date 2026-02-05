@@ -22,7 +22,7 @@ import {
 } from "../../../stores/flow";
 import { NodeTypeEnum } from "../../flow/nodes";
 import {
-  PipelineEditorWithSuspense,
+  OneDragonEditorWithSuspense,
   ExternalEditor,
   AnchorEditor,
 } from "../node-editors";
@@ -34,7 +34,7 @@ import RecognitionCardList from "../tools/RecognitionCardList";
 import NodeRecognitionCardList from "../tools/NodeRecognitionCardList";
 import { DraggablePanel } from "../common/DraggablePanel";
 
-// 节点数据验证与修复
+// 节点数据验证与修复 - OneDragon 格式
 function validateAndRepairNode(node: NodeType): {
   valid: boolean;
   error?: string;
@@ -52,55 +52,37 @@ function validateAndRepairNode(node: NodeType): {
     return { valid: false, error: "节点数据结构损坏" };
   }
 
-  // 验证 Pipeline 节点
+  // 验证 Pipeline 节点 - OneDragon 格式
   if (node.type === NodeTypeEnum.Pipeline) {
     const pipelineNode = node as PipelineNodeType;
     let needsRepair = false;
     const repairedData = { ...pipelineNode.data };
 
-    // 检查并修复 recognition
-    if (
-      !repairedData.recognition ||
-      typeof repairedData.recognition !== "object"
-    ) {
+    // 检查并修复 label
+    if (!repairedData.label) {
       needsRepair = true;
-      repairedData.recognition = { type: "DirectHit", param: {} };
-    } else {
-      if (!repairedData.recognition.type) {
-        needsRepair = true;
-        repairedData.recognition.type = "DirectHit";
-      }
-      if (
-        !repairedData.recognition.param ||
-        typeof repairedData.recognition.param !== "object"
-      ) {
-        needsRepair = true;
-        repairedData.recognition.param = {};
-      }
+      repairedData.label = "未命名节点";
     }
 
-    // 检查并修复 action
-    if (!repairedData.action || typeof repairedData.action !== "object") {
+    // 检查并修复 methodName
+    if (!repairedData.methodName) {
       needsRepair = true;
-      repairedData.action = { type: "DoNothing", param: {} };
-    } else {
-      if (!repairedData.action.type) {
-        needsRepair = true;
-        repairedData.action.type = "DoNothing";
-      }
-      if (
-        !repairedData.action.param ||
-        typeof repairedData.action.param !== "object"
-      ) {
-        needsRepair = true;
-        repairedData.action.param = {};
-      }
+      repairedData.methodName = repairedData.label.toLowerCase().replace(/\s+/g, "_");
     }
 
-    // 检查并修复 others
-    if (!repairedData.others || typeof repairedData.others !== "object") {
-      needsRepair = true;
-      repairedData.others = {};
+    // 检查并修复 nodeFrom
+    if (!repairedData.nodeFrom) {
+      repairedData.nodeFrom = [];
+    }
+
+    // 检查并修复 nodeNotify
+    if (!repairedData.nodeNotify) {
+      repairedData.nodeNotify = [];
+    }
+
+    // 检查并修复 code
+    if (!repairedData.code) {
+      repairedData.code = "return self.round_success()";
     }
 
     if (needsRepair) {
@@ -272,7 +254,7 @@ function FieldPanel() {
               nodeType="Pipeline"
               onRepair={handleNodeRepair}
             >
-              <PipelineEditorWithSuspense
+              <OneDragonEditorWithSuspense
                 currentNode={nodeToRender as PipelineNodeType}
               />
             </EditorErrorBoundary>

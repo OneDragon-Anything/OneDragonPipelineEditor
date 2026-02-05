@@ -6,104 +6,95 @@ import {
   useToolbarStore,
   type ImportAction,
 } from "../../../stores/toolbarStore";
-import { useConfigStore } from "../../../stores/configStore";
-import { pipelineToFlow, mergePipelineAndConfig } from "../../../core/parser";
-import { ClipboardHelper } from "../../../utils/clipboard";
-import { flowToPipeline } from "../../../core/parser";
+import { parsePythonFile, convertToFlowData } from "../../../core/parser";
+import { useFlowStore } from "../../../stores/flow";
+import { LayoutHelper } from "../../../core/layout";
 import style from "../../../styles/ToolbarPanel.module.less";
 
 /**
  * 导入按钮组件
- * 支持从粘贴板或文件导入 Pipeline/配置,点击执行默认操作,悬停显示菜单
+ * 支持从粘贴板或文件导入 OneDragon Python 工作流
  */
 function ImportButton() {
   const { defaultImportAction, setDefaultImportAction } = useToolbarStore();
-  const configHandlingMode = useConfigStore(
-    (state) => state.configs.configHandlingMode
-  );
+  const { setNodes, setEdges, clearHistory, saveHistory } = useFlowStore();
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const configFileInputRef = useRef<HTMLInputElement>(null);
+  const pythonFileInputRef = useRef<HTMLInputElement>(null);
 
-  // 导入操作处理
-  const handleImportFromClipboard = async () => {
+  // 从 Python 内容导入
+  const importFromPythonContent = async (content: string, source: string) => {
     try {
-      const success = await pipelineToFlow();
-      if (success) {
-        message.success("从粘贴板导入 Pipeline 成功");
+      console.log("[ImportButton] 开始解析 Python 内容...");
+      
+      // 解析 Python 文件
+      const parseResult = parsePythonFile(content);
+      console.log("[ImportButton] 解析结果:", parseResult);
+      
+      if (parseResult.nodes.length === 0) {
+        message.warning("未找到有效的 OneDragon 节点定义（需要 @operation_node 装饰器）");
+        return false;
       }
+
+      console.log("[ImportButton] 转换为 Flow 数据...");
+      // 转换为 Flow 数据
+      const flowData = convertToFlowData(parseResult);
+      console.log("[ImportButton] Flow 数据:", flowData);
+
+      // 更新状态
+      console.log("[ImportButton] 更新状态...");
+      clearHistory();
+      setNodes(flowData.nodes);
+      setEdges(flowData.edges);
+      saveHistory(0);  // 立即保存历史记录
+
+      // 延迟触发自动布局
+      console.log("[ImportButton] 触发自动布局...");
+      setTimeout(() => {
+        try {
+          LayoutHelper.auto();
+          console.log("[ImportButton] 自动布局完成");
+        } catch (layoutErr) {
+          console.error("[ImportButton] 布局失败:", layoutErr);
+        }
+      }, 100);
+
+      message.success(`从${source}导入成功，共 ${parseResult.nodes.length} 个节点`);
+      return true;
     } catch (err) {
-      message.error("导入失败,请检查粘贴板内容");
-      console.error(err);
+      console.error("[ImportButton] 导入失败:", err);
+      message.error(`导入失败: ${err instanceof Error ? err.message : String(err)}`);
+      return false;
     }
   };
 
-  const handleImportFromFile = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleImportConfigFromClipboard = async () => {
+  // 从粘贴板导入 Python
+  const handleImportFromClipboard = async () => {
     try {
-      const text = await ClipboardHelper.read();
+      const text = await navigator.clipboard.readText();
       if (!text) {
         message.error("粘贴板内容为空");
         return;
       }
-      const mpeConfig = JSON.parse(text);
-      const currentPipeline = flowToPipeline();
-      const mergedPipeline = mergePipelineAndConfig(currentPipeline, mpeConfig);
-      const success = await pipelineToFlow({
-        pString: JSON.stringify(mergedPipeline),
-      });
-      if (success) {
-        message.success("从粘贴板导入配置成功");
-      }
+      await importFromPythonContent(text, "粘贴板");
     } catch (err) {
-      message.error("导入配置失败");
+      message.error("读取粘贴板失败");
       console.error(err);
     }
   };
 
-  const handleImportConfigFromFile = () => {
-    configFileInputRef.current?.click();
+  // 从文件导入 Python
+  const handleImportFromFile = () => {
+    pythonFileInputRef.current?.click();
   };
 
-  const onFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onPythonFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       try {
         const text = await file.text();
-        const success = await pipelineToFlow({ pString: text });
-        if (success) {
-          message.success("从文件导入 Pipeline 成功");
-        }
+        await importFromPythonContent(text, `文件 ${file.name}`);
       } catch (err) {
-        message.error("文件导入失败,请检查文件格式");
-        console.error(err);
-      }
-      e.target.value = "";
-    }
-  };
-
-  const onConfigFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      try {
-        const text = await file.text();
-        const mpeConfig = JSON.parse(text);
-        const currentPipeline = flowToPipeline();
-        const mergedPipeline = mergePipelineAndConfig(
-          currentPipeline,
-          mpeConfig
-        );
-        const success = await pipelineToFlow({
-          pString: JSON.stringify(mergedPipeline),
-        });
-        if (success) {
-          message.success("从文件导入配置成功");
-        }
-      } catch (err) {
-        message.error("配置文件导入失败");
+        message.error("文件读取失败");
         console.error(err);
       }
       e.target.value = "";
@@ -119,12 +110,8 @@ function ImportButton() {
       case "file-pipeline":
         handleImportFromFile();
         break;
-      case "clipboard-config":
-        handleImportConfigFromClipboard();
-        break;
-      case "file-config":
-        handleImportConfigFromFile();
-        break;
+      default:
+        handleImportFromClipboard();
     }
   };
 
@@ -138,7 +125,7 @@ function ImportButton() {
     const items: MenuProps["items"] = [
       {
         key: "clipboard-pipeline",
-        label: "从粘贴板导入 Pipeline",
+        label: "从粘贴板导入 Python",
         onClick: () => {
           setDefaultImportAction("clipboard-pipeline");
           executeImportAction("clipboard-pipeline");
@@ -146,7 +133,7 @@ function ImportButton() {
       },
       {
         key: "file-pipeline",
-        label: "从文件导入 Pipeline",
+        label: "从文件导入 Python",
         onClick: () => {
           setDefaultImportAction("file-pipeline");
           executeImportAction("file-pipeline");
@@ -154,31 +141,8 @@ function ImportButton() {
       },
     ];
 
-    // 仅在分离导出模式下显示配置导入选项
-    if (configHandlingMode === "separated") {
-      items.push(
-        { type: "divider" },
-        {
-          key: "clipboard-config",
-          label: "从粘贴板导入配置",
-          onClick: () => {
-            setDefaultImportAction("clipboard-config");
-            executeImportAction("clipboard-config");
-          },
-        },
-        {
-          key: "file-config",
-          label: "从文件导入配置",
-          onClick: () => {
-            setDefaultImportAction("file-config");
-            executeImportAction("file-config");
-          },
-        }
-      );
-    }
-
     return items;
-  }, [configHandlingMode, setDefaultImportAction]);
+  }, [setDefaultImportAction]);
 
   // 获取按钮文本和当前操作描述
   const { buttonLabel, currentActionDesc } = useMemo(() => {
@@ -187,10 +151,6 @@ function ImportButton() {
         return { buttonLabel: "导入", currentActionDesc: "粘贴板" };
       case "file-pipeline":
         return { buttonLabel: "导入", currentActionDesc: "文件" };
-      case "clipboard-config":
-        return { buttonLabel: "导入", currentActionDesc: "粘贴板配置" };
-      case "file-config":
-        return { buttonLabel: "导入", currentActionDesc: "配置文件" };
       default:
         return { buttonLabel: "导入", currentActionDesc: "粘贴板" };
     }
@@ -199,18 +159,12 @@ function ImportButton() {
   return (
     <>
       <input
-        ref={fileInputRef}
+        ref={pythonFileInputRef}
         type="file"
-        accept=".json,.jsonc"
+        accept=".py"
         style={{ display: "none" }}
-        onChange={onFileSelect}
-      />
-      <input
-        ref={configFileInputRef}
-        type="file"
-        accept=".mpe.json"
-        style={{ display: "none" }}
-        onChange={onConfigFileSelect}
+        onChange={onPythonFileSelect}
+        title="选择 Python 文件"
       />
       <Dropdown
         menu={{ items: menuItems }}

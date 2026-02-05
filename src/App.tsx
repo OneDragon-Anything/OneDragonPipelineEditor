@@ -22,7 +22,7 @@ import { localServer } from "./services/server";
 import Header from "./components/Header";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import MainFlow from "./components/Flow";
-import JsonViewer from "./components/JsonViewer";
+import PythonViewer from "./components/JsonViewer";
 import FieldPanel from "./components/panels/main/FieldPanel";
 import EdgePanel from "./components/panels/main/EdgePanel";
 import ToolPanel from "./components/panels/tools/ToolPanel";
@@ -289,7 +289,7 @@ function App() {
             <div className={style.workspace}>
               <ToolbarPanel />
               <MainFlow />
-              <JsonViewer />
+              <PythonViewer />
               <FieldPanel />
               <EdgePanel />
               <ConfigPanel />

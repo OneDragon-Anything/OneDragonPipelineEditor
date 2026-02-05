@@ -11,7 +11,6 @@ import {
   SourceHandleTypeEnum,
   TargetHandleTypeEnum,
 } from "../../../components/flow/nodes";
-import { recoParamKeys, actionParamKeys } from "../../../core/fields";
 import {
   createPipelineNode,
   createExternalNode,
@@ -215,7 +214,7 @@ export const createNodeSlice: StateCreator<FlowStore, [], [], FlowNodeState> = (
     get().saveHistory(0);
   },
 
-  // 更新节点数据
+  // 更新节点数据 - OneDragon 格式
   setNodeData(id: string, type: string, key: string, value: any) {
     set((state) => {
       const nodeIndex = findNodeIndexById(state.nodes, id);
@@ -229,20 +228,11 @@ export const createNodeSlice: StateCreator<FlowStore, [], [], FlowNodeState> = (
         ...originalNode,
         data: {
           ...originalNode.data,
-          recognition: originalNode.data.recognition
-            ? {
-                ...originalNode.data.recognition,
-                param: { ...originalNode.data.recognition.param },
-              }
+          nodeFrom: originalNode.data.nodeFrom
+            ? [...originalNode.data.nodeFrom]
             : undefined,
-          action: originalNode.data.action
-            ? {
-                ...originalNode.data.action,
-                param: { ...originalNode.data.action.param },
-              }
-            : undefined,
-          others: originalNode.data.others
-            ? { ...originalNode.data.others }
+          nodeNotify: originalNode.data.nodeNotify
+            ? [...originalNode.data.nodeNotify]
             : undefined,
         },
       };
@@ -251,43 +241,45 @@ export const createNodeSlice: StateCreator<FlowStore, [], [], FlowNodeState> = (
       if (Array.isArray(value)) value = [...value];
 
       // 更新节点数据
-      if (type === "recognition" || type === "action") {
-        // 识别与动作字段
+      if (type === "data") {
+        // 直接更新 data 字段
         if (value === "__mpe_delete") {
-          delete targetNode.data[type].param[key];
+          delete targetNode.data[key];
         } else {
-          targetNode.data[type].param[key] = value;
+          targetNode.data[key] = value;
         }
-      } else if (type === "type") {
-        // 识别与动作类型
-        const field = targetNode.data[key];
-        field.type = value;
-        const fieldParamKeys =
-          key === "recognition" ? recoParamKeys[value] : actionParamKeys[value];
-
-        // 删除不存在的字段
-        const curKeys = Object.keys(field.param);
-        curKeys.forEach((paramKey) => {
-          if (!fieldParamKeys.all.includes(paramKey)) {
-            delete field.param[paramKey];
-          }
-        });
-
-        // 添加必选字段
-        fieldParamKeys.requires.forEach((req, index) => {
-          if (!(req in field.param)) {
-            field.param[req] = fieldParamKeys.required_default[index];
-          }
-        });
-      } else if (type === "others") {
-        // 其他字段
+      } else if (type === "nodeFrom") {
+        // 更新来源连接
         if (value === "__mpe_delete") {
-          delete targetNode.data.others[key];
+          targetNode.data.nodeFrom = targetNode.data.nodeFrom?.filter(
+            (_: any, i: number) => i !== parseInt(key)
+          );
         } else {
-          targetNode.data.others[key] = value;
+          if (!targetNode.data.nodeFrom) targetNode.data.nodeFrom = [];
+          const index = parseInt(key);
+          if (index >= 0 && index < targetNode.data.nodeFrom.length) {
+            targetNode.data.nodeFrom[index] = value;
+          } else {
+            targetNode.data.nodeFrom.push(value);
+          }
+        }
+      } else if (type === "nodeNotify") {
+        // 更新通知配置
+        if (value === "__mpe_delete") {
+          targetNode.data.nodeNotify = targetNode.data.nodeNotify?.filter(
+            (_: any, i: number) => i !== parseInt(key)
+          );
+        } else {
+          if (!targetNode.data.nodeNotify) targetNode.data.nodeNotify = [];
+          const index = parseInt(key);
+          if (index >= 0 && index < targetNode.data.nodeNotify.length) {
+            targetNode.data.nodeNotify[index] = value;
+          } else {
+            targetNode.data.nodeNotify.push(value);
+          }
         }
       } else {
-        // 其他类型
+        // 其他类型直接更新
         targetNode.data[key] = value;
       }
 
@@ -338,26 +330,17 @@ export const createNodeSlice: StateCreator<FlowStore, [], [], FlowNodeState> = (
       let nodes = [...state.nodes];
       const originalNode = nodes[nodeIndex] as PipelineNodeType;
 
-      // 深拷贝节点
+      // 深拷贝节点 - OneDragon 格式
       let targetNode: PipelineNodeType = {
         ...originalNode,
         data: {
           ...originalNode.data,
-          recognition: originalNode.data.recognition
-            ? {
-                ...originalNode.data.recognition,
-                param: { ...originalNode.data.recognition.param },
-              }
-            : { type: "DirectHit", param: {} },
-          action: originalNode.data.action
-            ? {
-                ...originalNode.data.action,
-                param: { ...originalNode.data.action.param },
-              }
-            : { type: "DoNothing", param: {} },
-          others: originalNode.data.others
-            ? { ...originalNode.data.others }
-            : {},
+          nodeFrom: originalNode.data.nodeFrom
+            ? [...originalNode.data.nodeFrom]
+            : undefined,
+          nodeNotify: originalNode.data.nodeNotify
+            ? [...originalNode.data.nodeNotify]
+            : undefined,
         },
       };
 
@@ -367,48 +350,45 @@ export const createNodeSlice: StateCreator<FlowStore, [], [], FlowNodeState> = (
         let processedValue = value;
         if (Array.isArray(value)) processedValue = [...value];
 
-        if (type === "recognition" || type === "action") {
-          // 识别与动作字段
+        if (type === "data") {
+          // 直接更新 data 字段
           if (processedValue === "__mpe_delete") {
-            delete targetNode.data[type].param[key];
+            delete (targetNode.data as any)[key];
           } else {
-            targetNode.data[type].param[key] = processedValue;
+            (targetNode.data as any)[key] = processedValue;
           }
-        } else if (type === "type") {
-          // 识别与动作类型
-          const field = targetNode.data[key as "recognition" | "action"];
-          field.type = processedValue;
-          const fieldParamKeys =
-            key === "recognition"
-              ? recoParamKeys[processedValue]
-              : actionParamKeys[processedValue];
-
-          // 删除不存在的字段
-          const curKeys = Object.keys(field.param);
-          curKeys.forEach((paramKey) => {
-            if (!fieldParamKeys.all.includes(paramKey)) {
-              delete field.param[paramKey];
-            }
-          });
-
-          // 添加必选字段
-          fieldParamKeys.requires.forEach((req: string, index: number) => {
-            if (!(req in field.param)) {
-              field.param[req] = fieldParamKeys.required_default[index];
-            }
-          });
-        } else if (type === "others") {
-          // 其他字段
-          if (!targetNode.data.others) {
-            targetNode.data.others = {};
-          }
+        } else if (type === "nodeFrom") {
+          // 更新来源连接
           if (processedValue === "__mpe_delete") {
-            delete targetNode.data.others[key];
+            targetNode.data.nodeFrom = targetNode.data.nodeFrom?.filter(
+              (_: any, i: number) => i !== parseInt(key)
+            );
           } else {
-            targetNode.data.others[key] = processedValue;
+            if (!targetNode.data.nodeFrom) targetNode.data.nodeFrom = [];
+            const index = parseInt(key);
+            if (index >= 0 && index < targetNode.data.nodeFrom.length) {
+              targetNode.data.nodeFrom[index] = processedValue;
+            } else {
+              targetNode.data.nodeFrom.push(processedValue);
+            }
+          }
+        } else if (type === "nodeNotify") {
+          // 更新通知配置
+          if (processedValue === "__mpe_delete") {
+            targetNode.data.nodeNotify = targetNode.data.nodeNotify?.filter(
+              (_: any, i: number) => i !== parseInt(key)
+            );
+          } else {
+            if (!targetNode.data.nodeNotify) targetNode.data.nodeNotify = [];
+            const index = parseInt(key);
+            if (index >= 0 && index < targetNode.data.nodeNotify.length) {
+              targetNode.data.nodeNotify[index] = processedValue;
+            } else {
+              targetNode.data.nodeNotify.push(processedValue);
+            }
           }
         } else {
-          // 其他类型
+          // 其他类型直接更新
           (targetNode.data as any)[key] = processedValue;
         }
       }

@@ -29,6 +29,7 @@ export type {
   AnchorNodeType,
   EdgeType,
   EdgeAttributesType,
+  EdgeConditionType,
   PositionType,
   RecognitionParamType,
   ActionParamType,
@@ -37,6 +38,8 @@ export type {
   PipelineNodeDataType,
   ExternalNodeDataType,
   AnchorNodeDataType,
+  NodeFromParams,
+  NodeNotifyParams,
 } from "./types";
 export {
   createPipelineNode,

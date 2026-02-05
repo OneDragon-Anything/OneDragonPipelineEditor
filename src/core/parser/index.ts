@@ -1,12 +1,15 @@
 /**
  * Parser 模块 - Pipeline 格式与 Flow 格式互转
  *
- * 该模块负责 MaaPipelineEditor 的核心解析功能：
+ * 该模块负责 OneDragon Pipeline Editor 的核心解析功能：
+ * - OneDragon Python 格式解析和导出
  * - flowToPipeline: 将可视化编辑器的 Flow 格式转换为 Pipeline JSON 格式
  * - pipelineToFlow: 将 Pipeline JSON 格式解析为可视化编辑器的 Flow 格式
  *
  * 模块已被重构为多个子模块以提高可维护性：
  * - types: 类型定义
+ * - pythonParser: OneDragon Python 解析器
+ * - pythonExporter: OneDragon Python 导出器
  * - typeMatchers: 类型匹配与转换
  * - versionDetector: 版本检测与兼容
  * - configParser: 配置解析
@@ -15,6 +18,11 @@
  * - exporter: 导出逻辑
  * - importer: 导入逻辑
  */
+
+// OneDragon Python 解析器和导出器
+export { parsePythonFile, convertToFlowData } from "./pythonParser";
+export { exportToPython, generatePythonClass } from "./pythonExporter";
+export type { ExportMetadata, FlowNodeData, FlowEdgeData } from "./pythonExporter";
 
 export { flowToPipeline, flowToPipelineString, flowToSeparatedStrings } from "./exporter";
 export { pipelineToFlow } from "./importer";
