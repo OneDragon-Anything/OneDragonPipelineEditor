@@ -1,7 +1,7 @@
 import style from "../../../styles/EdgePanel.module.less";
 
 import { memo, useMemo, useCallback, useEffect } from "react";
-import { Tag, InputNumber, Tooltip, Switch } from "antd";
+import { Tag, Tooltip, Input, Checkbox } from "antd";
 import classNames from "classnames";
 import IconFont from "../../iconfonts";
 
@@ -9,65 +9,108 @@ import {
   useFlowStore,
   findNodeLabelById,
   type EdgeType,
-  type NodeType,
 } from "../../../stores/flow";
-import {
-  NodeTypeEnum,
-  SourceHandleTypeEnum,
-  TargetHandleTypeEnum,
-} from "../../flow/nodes";
 import { useToolbarStore } from "../../../stores/toolbarStore";
 import { useConfigStore } from "../../../stores/configStore";
 import { DraggablePanel } from "../common/DraggablePanel";
 
-// 获取连接类型信息
-const getEdgeTypeTags = (edge: EdgeType, nodes: NodeType[]) => {
-  const tags: { label: string; color: string }[] = [];
-
-  // jumpback
-  const isJumpBack = edge.targetHandle === TargetHandleTypeEnum.JumpBack;
-  if (isJumpBack) {
-    tags.push({ label: "jumpback", color: "orange" });
-  }
-
-  // anchor
-  const targetNode = nodes.find((n) => n.id === edge.target);
-  if (targetNode?.type === NodeTypeEnum.Anchor) {
-    tags.push({ label: "anchor", color: "blue" });
-  }
-
-  // 基础连接类型
-  switch (edge.sourceHandle) {
-    case SourceHandleTypeEnum.Next:
-      tags.push({ label: "next", color: "green" });
-      break;
-    case SourceHandleTypeEnum.Error:
-      tags.push({ label: "on_error", color: "magenta" });
-      break;
-  }
-
-  return tags;
+/**
+ * 边条件：
+ * - success: undefined (默认=成功) | true (成功) | false (失败) — 存储在 attributes 中
+ * - status: undefined (无) | string (状态值) — 决定 sourceHandle
+ *
+ * sourceHandle 编码格式（只基于 status）:
+ * - "default" = status=undefined（无状态条件）
+ * - "status:xxx" = status=xxx（指定状态值）
+ * 
+ * 注意：在框架中，默认（不选/success=undefined）就是成功！
+ * success=false 明确表示"失败时"
+ */
+type EdgeConditionState = {
+  success?: boolean;  // undefined/true=成功, false=失败（存储在 attributes）
+  status?: string;    // undefined/空=无状态, 有值=特定状态（决定 sourceHandle）
 };
 
-// 边信息展示
+// 从 sourceHandle 和 attributes 解析条件状态
+const parseEdgeCondition = (edge: EdgeType): EdgeConditionState => {
+  const handle = edge.sourceHandle || "default";
+  const attrs = edge.attributes || {};
+
+  let status: string | undefined;
+
+  // 从 sourceHandle 解析 status
+  if (handle.startsWith("status:")) {
+    status = handle.replace("status:", "");
+  }
+  // 兼容旧格式
+  else if (handle === "status" && attrs.status) {
+    status = String(attrs.status);
+  }
+
+  // success 从 attributes 读取
+  const success = attrs.success as boolean | undefined;
+
+  return { success, status };
+};
+
+// 生成 sourceHandle 字符串（只基于 status）
+const buildSourceHandle = (state: EdgeConditionState): string => {
+  const { status } = state;
+  const hasStatus = status !== undefined && status !== "";
+  return hasStatus ? `status:${status}` : "default";
+};
+
+// 生成条件显示文本
+const getConditionDisplayText = (state: EdgeConditionState): string => {
+  const { success, status } = state;
+  const parts: string[] = [];
+
+  // 状态条件
+  if (status !== undefined && status !== "") {
+    parts.push(`状态: ${status}`);
+  } else {
+    parts.push("默认出口");
+  }
+
+  // 失败时才特别标注（因为默认就是成功）
+  if (success === false) {
+    parts.push("(失败)");
+  }
+
+  return parts.join(" ");
+};
+
+// 边信息展示 - OneDragon 格式
 const EdgeInfoElem = memo(
   ({
-    edge,
     sourceLabel,
     targetLabel,
-    maxOrder,
-    tags,
-    onOrderChange,
-    onJumpBackChange,
+    conditionState,
+    onConditionChange,
   }: {
-    edge: EdgeType;
     sourceLabel: string;
     targetLabel: string;
-    maxOrder: number;
-    tags: { label: string; color: string }[];
-    onOrderChange: (value: number) => void;
-    onJumpBackChange: (checked: boolean) => void;
+    conditionState: EdgeConditionState;
+    onConditionChange: (state: EdgeConditionState) => void;
   }) => {
+    const { success, status } = conditionState;
+
+    // 失败勾选变化（默认=成功，只需要一个失败复选框）
+    const handleFailChange = (checked: boolean) => {
+      if (checked) {
+        // 勾选失败
+        onConditionChange({ ...conditionState, success: false });
+      } else {
+        // 取消失败 -> 默认（成功）
+        onConditionChange({ ...conditionState, success: undefined });
+      }
+    };
+
+    // 状态值变化
+    const handleStatusChange = (value: string) => {
+      onConditionChange({ ...conditionState, status: value || undefined });
+    };
+
     return (
       <>
         <div className={style.info}>
@@ -80,47 +123,46 @@ const EdgeInfoElem = memo(
             <span className={style.content}>{targetLabel}</span>
           </div>
           <div className={style["info-item"]}>
-            <span className={style.label}>连接类型</span>
+            <span className={style.label}>当前条件</span>
             <span className={style.content}>
-              {tags.map((tag, index) => (
-                <Tag key={index} color={tag.color}>
-                  {tag.label}
-                </Tag>
-              ))}
+              <Tag style={{ whiteSpace: "normal", wordBreak: "break-all" }}>
+                {getConditionDisplayText(conditionState)}
+              </Tag>
             </span>
           </div>
           <div className={style["info-item"]}>
-            <span className={style.label}>顺序</span>
+            <span className={style.label}>状态值</span>
             <span className={style.content}>
-              <InputNumber
+              <Input
                 size="small"
-                min={1}
-                max={maxOrder}
-                value={edge.label as number}
-                onChange={(val) => val && onOrderChange(val)}
-                style={{ width: 50 }}
-                controls={true}
+                value={status || ""}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                placeholder="可选，如：1、2"
+                style={{ width: "100%" }}
               />
-              <span style={{ marginLeft: 8, color: "#999", fontSize: 16 }}>
-                / {maxOrder}
-              </span>
+            </span>
+          </div>
+          <div className={style["info-item"]}>
+            <span className={style.label}>执行结果</span>
+            <span className={style.content}>
+              <Checkbox
+                checked={success === false}
+                onChange={(e) => handleFailChange(e.target.checked)}
+              >
+                <span className={style["condition-fail"]}>失败时</span>
+              </Checkbox>
+              <span className={style.hint2}>（不勾选 = 成功时）</span>
             </span>
           </div>
         </div>
-        {edge.sourceHandle === SourceHandleTypeEnum.Error && (
-          <div className={style["jumpback-section"]}>
-            <div className={style["info-item"]}>
-              <span className={style.label}>JumpBack</span>
-              <span className={style.content}>
-                <Switch
-                  size="small"
-                  checked={edge.attributes?.jump_back ?? false}
-                  onChange={onJumpBackChange}
-                />
-              </span>
-            </div>
-          </div>
-        )}
+        <div className={style.hint}>
+          <IconFont name="icon-xiaohongshubiaoti" size={14} />
+          <span>
+            "状态值" 和 "失败时" 可以组合使用。
+            <br />
+            例如：状态值"1" + 勾选"失败时" = 失败且状态为1时触发
+          </span>
+        </div>
       </>
     );
   }
@@ -137,8 +179,9 @@ function EdgePanel() {
   const setCurrentRightPanel = useToolbarStore(
     (state) => state.setCurrentRightPanel
   );
+  const updateEdges = useFlowStore((state) => state.updateEdges);
 
-  // 判断是否只有一条边被选中且没有选中节点
+  // 当前选中的边（只处理单条边）
   const currentEdge = useMemo(() => {
     if (selectedEdges.length === 1 && !targetNode) {
       return selectedEdges[0];
@@ -153,11 +196,6 @@ function EdgePanel() {
     }
   }, [currentEdge, setCurrentRightPanel]);
 
-  const edges = useFlowStore((state) => state.edges);
-  const setEdgeLabel = useFlowStore((state) => state.setEdgeLabel);
-  const setEdgeData = useFlowStore((state) => state.setEdgeData);
-  const updateEdges = useFlowStore((state) => state.updateEdges);
-
   // 获取源节点和目标节点的名称
   const { sourceLabel, targetLabel } = useMemo(() => {
     if (!currentEdge) {
@@ -169,40 +207,42 @@ function EdgePanel() {
     };
   }, [currentEdge, nodes]);
 
-  // 总边数
-  const maxOrder = useMemo(() => {
-    if (!currentEdge) return 1;
-    return edges.filter((e) => {
-      if (e.source !== currentEdge.source) return false;
-      return e.sourceHandle === currentEdge.sourceHandle;
-    }).length;
-  }, [currentEdge, edges]);
+  // 获取当前条件状态
+  const conditionState = useMemo<EdgeConditionState>(() => {
+    if (!currentEdge) return {};
+    return parseEdgeCondition(currentEdge);
+  }, [currentEdge]);
 
-  // 顺序变更处理
-  const handleOrderChange = useCallback(
-    (value: number) => {
-      if (currentEdge) {
-        setEdgeLabel(currentEdge.id, value);
-      }
-    },
-    [currentEdge, setEdgeLabel]
-  );
+  // 条件变更处理 - 更新边的 sourceHandle
+  const handleConditionChange = useCallback(
+    (newState: EdgeConditionState) => {
+      if (!currentEdge) return;
 
-  // jump_back 开关变更处理
-  const handleJumpBackChange = useCallback(
-    (checked: boolean) => {
-      if (currentEdge) {
-        setEdgeData(currentEdge.id, "jump_back", checked);
-      }
+      const newSourceHandle = buildSourceHandle(newState);
+
+      // 更新边
+      updateEdges([{
+        type: "replace",
+        id: currentEdge.id,
+        item: {
+          ...currentEdge,
+          id: `edge_${currentEdge.source}_${currentEdge.target}_${newSourceHandle}`,
+          sourceHandle: newSourceHandle,
+          attributes: {
+            ...currentEdge.attributes,
+            success: newState.success,
+            status: newState.status,
+          },
+        } as EdgeType,
+      }]);
     },
-    [currentEdge, setEdgeData]
+    [currentEdge, updateEdges]
   );
 
   // 删除连接
   const handleDelete = useCallback(() => {
-    if (currentEdge) {
-      updateEdges([{ type: "remove", id: currentEdge.id }]);
-    }
+    if (!currentEdge) return;
+    updateEdges([{ type: "remove", id: currentEdge.id }]);
   }, [currentEdge, updateEdges]);
 
   // 样式
@@ -240,17 +280,12 @@ function EdgePanel() {
         </div>
       </div>
       {currentEdge && (
-        <>
-          <EdgeInfoElem
-            edge={currentEdge}
-            sourceLabel={sourceLabel}
-            targetLabel={targetLabel}
-            maxOrder={maxOrder}
-            tags={getEdgeTypeTags(currentEdge, nodes)}
-            onOrderChange={handleOrderChange}
-            onJumpBackChange={handleJumpBackChange}
-          />
-        </>
+        <EdgeInfoElem
+          sourceLabel={sourceLabel}
+          targetLabel={targetLabel}
+          conditionState={conditionState}
+          onConditionChange={handleConditionChange}
+        />
       )}
     </>
   );

@@ -22,7 +22,7 @@ import {
 } from "../../../stores/flow";
 import { NodeTypeEnum } from "../../flow/nodes";
 import {
-  OneDragonEditorWithSuspense,
+  PipelineEditorWithSuspense,
   ExternalEditor,
   AnchorEditor,
 } from "../node-editors";
@@ -254,7 +254,7 @@ function FieldPanel() {
               nodeType="Pipeline"
               onRepair={handleNodeRepair}
             >
-              <OneDragonEditorWithSuspense
+              <PipelineEditorWithSuspense
                 currentNode={nodeToRender as PipelineNodeType}
               />
             </EditorErrorBoundary>

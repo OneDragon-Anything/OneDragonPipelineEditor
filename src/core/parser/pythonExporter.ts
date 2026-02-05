@@ -3,7 +3,7 @@
  * 将 Flow 节点和边导出为 Python 装饰器风格的代码
  */
 
-import type { NodeFromParams, NodeNotifyParams } from "../../stores/flow/types-onedragon";
+import type { NodeFromParams, NodeNotifyParams } from "../../stores/flow/types";
 
 /**
  * 导出元数据
@@ -38,10 +38,11 @@ export interface FlowNodeData {
  */
 export interface FlowEdgeData {
   source: string;
+  sourceHandle?: string;    // "default" 或 "status:xxx"
   target: string;
   attributes?: {
-    condition?: 'default' | 'success' | 'fail' | 'status';
-    status?: string;
+    success?: boolean;      // undefined=默认, true=成功, false=失败
+    status?: string;        // 状态值
   };
 }
 
@@ -61,27 +62,29 @@ function sanitizeMethodName(name: string): string {
     .toLowerCase()
     .replace(/[\s\-]+/g, "_")
     .replace(/[^a-z0-9_]/g, "");
-  
+
   // 确保不以数字开头
   if (/^\d/.test(result)) {
     result = "_" + result;
   }
-  
+
   return result || "unnamed_method";
 }
 
 /**
  * 生成 @node_from 装饰器
+ * 注意：框架中默认=成功，只有 success=false 时才需要生成 success=False
  */
 function generateNodeFromDecorator(nodeFrom: NodeFromParams): string {
   const params: string[] = [];
-  
+
   params.push(`from_name='${nodeFrom.from_name}'`);
-  
-  if (nodeFrom.success !== undefined) {
-    params.push(`success=${nodeFrom.success ? "True" : "False"}`);
+
+  // 只有失败时才生成 success=False（默认就是成功）
+  if (nodeFrom.success === false) {
+    params.push("success=False");
   }
-  
+
   if (nodeFrom.status !== undefined) {
     // 检查是否是变量引用（如 ClassName.STATUS_XXX）
     if (nodeFrom.status.includes(".") || nodeFrom.status.startsWith("STATUS_")) {
@@ -90,7 +93,7 @@ function generateNodeFromDecorator(nodeFrom: NodeFromParams): string {
       params.push(`status='${nodeFrom.status}'`);
     }
   }
-  
+
   return `@node_from(${params.join(", ")})`;
 }
 
@@ -99,13 +102,13 @@ function generateNodeFromDecorator(nodeFrom: NodeFromParams): string {
  */
 function generateNodeNotifyDecorator(notify: NodeNotifyParams): string {
   const params: string[] = [];
-  
+
   params.push(`when=${notify.when}`);
-  
+
   if (notify.detail !== undefined) {
     params.push(`detail=${notify.detail ? "True" : "False"}`);
   }
-  
+
   return `@node_notify(${params.join(", ")})`;
 }
 
@@ -118,17 +121,17 @@ function generateOperationNodeDecorator(
   saveStatus?: boolean
 ): string {
   const params: string[] = [];
-  
+
   params.push(`name='${name}'`);
-  
+
   if (isStartNode) {
     params.push("is_start_node=True");
   }
-  
+
   if (saveStatus) {
     params.push("save_status=True");
   }
-  
+
   return `@operation_node(${params.join(", ")})`;
 }
 
@@ -141,47 +144,53 @@ function generateMethod(
 ): string {
   const lines: string[] = [];
   const data = node.data;
-  
+
   // 生成 @node_from 装饰器
   for (const nodeFrom of nodeFromList) {
     lines.push(indent(1) + generateNodeFromDecorator(nodeFrom));
   }
-  
+
   // 生成 @node_notify 装饰器
   if (data.nodeNotify && data.nodeNotify.length > 0) {
     for (const notify of data.nodeNotify) {
       lines.push(indent(1) + generateNodeNotifyDecorator(notify));
     }
   }
-  
+
   // 生成 @operation_node 装饰器
   lines.push(
     indent(1) +
       generateOperationNodeDecorator(data.label, data.isStartNode, data.saveStatus)
   );
-  
+
   // 生成方法定义
   const methodName = sanitizeMethodName(data.methodName || data.label);
   lines.push(indent(1) + `def ${methodName}(self) -> OperationRoundResult:`);
-  
+
   // 生成文档字符串
   if (data.comment) {
     lines.push(indent(2) + `"""${data.comment}"""`);
   }
-  
+
   // 生成方法体
   const code = data.code || "return self.round_success()";
   const codeLines = code.split("\n");
   for (const codeLine of codeLines) {
     lines.push(indent(2) + codeLine);
   }
-  
+
   return lines.join("\n");
 }
 
 /**
  * 从边数据构建 nodeFrom 映射
  * 返回: { 目标节点ID: NodeFromParams[] }
+ *
+ * sourceHandle 只基于 status:
+ * - "default" = 无状态条件
+ * - "status:xxx" = 指定状态值
+ *
+ * success/fail 从 attributes 读取
  */
 function buildNodeFromMap(
   nodes: FlowNodeData[],
@@ -191,36 +200,44 @@ function buildNodeFromMap(
   for (const node of nodes) {
     nodeIdToLabel.set(node.id, node.data.label);
   }
-  
+
   const nodeFromMap = new Map<string, NodeFromParams[]>();
-  
+
   for (const edge of edges) {
     const sourceLabel = nodeIdToLabel.get(edge.source);
     const targetId = edge.target;
-    
+
     if (!sourceLabel) continue;
-    
+
+    const sourceHandle = edge.sourceHandle || "default";
+    const attrs = edge.attributes || {};
+
     const nodeFrom: NodeFromParams = {
       from_name: sourceLabel,
     };
-    
-    // 根据边的属性设置条件
-    if (edge.attributes) {
-      if (edge.attributes.condition === "success") {
-        nodeFrom.success = true;
-      } else if (edge.attributes.condition === "fail") {
-        nodeFrom.success = false;
-      } else if (edge.attributes.condition === "status" && edge.attributes.status) {
-        nodeFrom.status = edge.attributes.status;
-      }
+
+    // 从 sourceHandle 解析 status
+    if (sourceHandle.startsWith("status:")) {
+      nodeFrom.status = sourceHandle.replace("status:", "");
     }
-    
+    // 兼容旧格式 (status in attributes)
+    else if (sourceHandle === "status" && attrs.status) {
+      nodeFrom.status = attrs.status;
+    }
+
+    // success/fail 从 attributes 读取
+    if (attrs.success === true) {
+      nodeFrom.success = true;
+    } else if (attrs.success === false) {
+      nodeFrom.success = false;
+    }
+
     if (!nodeFromMap.has(targetId)) {
       nodeFromMap.set(targetId, []);
     }
     nodeFromMap.get(targetId)!.push(nodeFrom);
   }
-  
+
   return nodeFromMap;
 }
 
@@ -247,19 +264,19 @@ export function generatePythonClass(
   metadata?: Partial<ExportMetadata>
 ): string {
   const lines: string[] = [];
-  
+
   // 导入语句
   const imports = metadata?.imports || generateDefaultImports();
   lines.push(...imports);
   lines.push("");
   lines.push("");
-  
+
   // 类定义
   const className = metadata?.className || "GeneratedApp";
   const baseClass = metadata?.baseClass || "ZApplication";
   lines.push(`class ${className}(${baseClass}):`);
   lines.push("");
-  
+
   // 类变量
   if (metadata?.classVars && Object.keys(metadata.classVars).length > 0) {
     for (const [name, value] of Object.entries(metadata.classVars)) {
@@ -267,7 +284,7 @@ export function generatePythonClass(
     }
     lines.push("");
   }
-  
+
   // __init__ 方法
   if (metadata?.initCode) {
     lines.push(indent(1) + "def __init__(self, ctx: ZContext):");
@@ -277,29 +294,29 @@ export function generatePythonClass(
     }
     lines.push("");
   }
-  
+
   // 构建 nodeFrom 映射
   const nodeFromMap = buildNodeFromMap(nodes, edges);
-  
+
   // 过滤出 Pipeline 节点（排除 external 和 anchor）
   const pipelineNodes = nodes.filter(
     (n) => !n.id.startsWith("external_") && !n.id.startsWith("anchor_")
   );
-  
+
   // 按照起始节点优先排序
   const sortedNodes = [...pipelineNodes].sort((a, b) => {
     if (a.data.isStartNode && !b.data.isStartNode) return -1;
     if (!a.data.isStartNode && b.data.isStartNode) return 1;
     return 0;
   });
-  
+
   // 生成每个节点的方法
   for (const node of sortedNodes) {
     const nodeFromList = nodeFromMap.get(node.id) || node.data.nodeFrom || [];
     lines.push(generateMethod(node, nodeFromList));
     lines.push("");
   }
-  
+
   return lines.join("\n");
 }
 

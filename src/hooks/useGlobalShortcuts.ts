@@ -6,11 +6,25 @@ import { useFlowStore } from "../stores/flow";
  * 检查目标元素是否为可编辑元素（输入框、文本域等）
  */
 function isEditableElement(element: HTMLElement): boolean {
-  return (
+  // 检查基本可编辑元素
+  if (
     element.tagName === "INPUT" ||
     element.tagName === "TEXTAREA" ||
     element.isContentEditable
-  );
+  ) {
+    return true;
+  }
+
+  // 检查是否在 Monaco Editor 中
+  // Monaco Editor 使用 textarea.inputarea 或者 .monaco-editor 容器
+  if (
+    element.classList.contains("inputarea") ||
+    element.closest(".monaco-editor")
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /**

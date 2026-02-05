@@ -15,8 +15,7 @@ export {
   TargetHandleTypeEnum,
   DEFAULT_HANDLE_DIRECTION,
   HANDLE_DIRECTION_OPTIONS,
-  EDGE_CONDITION_OPTIONS,
 } from "./constants";
-export type { HandleDirection, EdgeConditionType } from "./constants";
+export type { HandleDirection } from "./constants";
 export type { IconConfig, RequiredIconConfig } from "./utils";
 export { getHandlePositions } from "./components/NodeHandles";

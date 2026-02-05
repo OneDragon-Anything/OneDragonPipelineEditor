@@ -4,7 +4,8 @@ import { type NodeProps } from "@xyflow/react";
 import style from "../../../../styles/nodes.module.less";
 import type { PipelineNodeDataType } from "../../../../stores/flow";
 import IconFont, { type IconNames } from "../../../iconfonts";
-import { OneDragonNodeHandles } from "../components/OneDragonNodeHandles";
+import { PipelineNodeHandles } from "../components/PipelineNodeHandles";
+import { getNotifyTimingLabel } from "../../../../core/fields/onedragon/enums";
 
 /**
  * OneDragon 节点的现代风格内容组件
@@ -129,7 +130,7 @@ export const ModernContent = memo(
               <div className={style.sectionContent}>
                 {data.nodeNotify?.map((notify, index) => (
                   <div key={index} className={style.notifyItem}>
-                    <span>{notify.when}</span>
+                    <span>{getNotifyTimingLabel(notify.when)}</span>
                     {notify.detail && <span className={style.detailBadge}>详情</span>}
                   </div>
                 ))}
@@ -152,7 +153,7 @@ export const ModernContent = memo(
         </div>
 
         {/* Handle 连接点 */}
-        <OneDragonNodeHandles handleDirection={data.handleDirection} />
+        <PipelineNodeHandles handleDirection={data.handleDirection} />
       </>
     );
   }

@@ -29,7 +29,6 @@ export type {
   AnchorNodeType,
   EdgeType,
   EdgeAttributesType,
-  EdgeConditionType,
   PositionType,
   RecognitionParamType,
   ActionParamType,
@@ -40,6 +39,9 @@ export type {
   AnchorNodeDataType,
   NodeFromParams,
   NodeNotifyParams,
+  OperationNodeParams,
+  ParsedOneDragonClass,
+  ParsedOneDragonNode,
 } from "./types";
 export {
   createPipelineNode,

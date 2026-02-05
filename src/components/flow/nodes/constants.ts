@@ -27,25 +27,6 @@ export enum NodeTypeEnum {
   Anchor = "anchor",
 }
 
-/**
- * 边条件类型
- */
-export type EdgeConditionType = 'default' | 'success' | 'fail' | 'status';
-
-/**
- * 边条件选项（用于UI）
- */
-export const EDGE_CONDITION_OPTIONS: {
-  value: EdgeConditionType;
-  label: string;
-  color: string;
-}[] = [
-  { value: "default", label: "默认", color: "#666" },
-  { value: "success", label: "成功", color: "#52c41a" },
-  { value: "fail", label: "失败", color: "#ff4d4f" },
-  { value: "status", label: "状态", color: "#1890ff" },
-];
-
 /**节点端点位置类型
  * - left-right: 左入右出（默认）
  * - right-left: 右入左出

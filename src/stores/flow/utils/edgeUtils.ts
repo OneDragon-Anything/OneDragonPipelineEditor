@@ -1,5 +1,4 @@
 import type { EdgeType } from "../types";
-import { SourceHandleTypeEnum } from "../../../components/flow/nodes";
 
 // 查找边
 export function findEdgeById(
@@ -18,12 +17,12 @@ export function getSelectedEdges(edges: EdgeType[]): EdgeType[] {
 export function calcuLinkOrder(
   edges: EdgeType[],
   source: string,
-  type: SourceHandleTypeEnum
+  sourceHandle: string
 ): number {
   let order = 1;
 
   edges.forEach((edge) => {
-    if (edge.source === source && edge.sourceHandle === type) {
+    if (edge.source === source && edge.sourceHandle === sourceHandle) {
       order++;
     }
   });

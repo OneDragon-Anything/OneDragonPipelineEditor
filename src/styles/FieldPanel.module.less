@@ -260,3 +260,193 @@
   overflow-x: auto;
   max-height: 400px;
 }
+
+// 可点击代码预览区域
+.codeClickable {
+  position: relative;
+  cursor: pointer;
+  background: #f5f5f5;
+  border-radius: 6px;
+  padding: 12px;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+
+  &:hover {
+    background: #ebebeb;
+    border-color: #83be42;
+
+    .codeEditHint {
+      opacity: 1;
+    }
+  }
+}
+
+.codePreviewSmall {
+  margin: 0;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #333;
+  max-height: 80px;
+  overflow: hidden;
+}
+
+.codeEditHint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #83be42;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+// 通知配置列表
+.notifyList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notifyItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f5f5f5;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.notifySelect {
+  flex: 1;
+  min-width: 120px;
+}
+
+.notifyDetailSwitch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #666;
+}
+
+.notifyDelete {
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+  
+  &:hover {
+    transform: scale(1.1);
+  }
+}
+
+.addNotifyBtn {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.emptyTip {
+  text-align: center;
+  padding: 16px;
+  color: #999;
+  font-size: 13px;
+}
+
+// Monaco Editor 容器
+.monacoContainer {
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #3c3c3c;
+}
+
+// 出口管理样式
+.outputList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.outputGroup {
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  padding: 8px;
+  background: #fafafa;
+
+  &:hover {
+    border-color: #1890ff;
+  }
+}
+
+.outputHandle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+
+  .dragHandle {
+    cursor: grab;
+    color: #999;
+    flex-shrink: 0;
+
+    &:hover {
+      color: #1890ff;
+    }
+  }
+
+  .edgeCount {
+    margin-left: auto;
+    font-size: 12px;
+    color: #999;
+    flex-shrink: 0;
+  }
+
+  // Tag 允许换行
+  :global(.ant-tag) {
+    white-space: normal;
+    word-break: break-all;
+    max-width: calc(100% - 80px);
+  }
+}
+
+.outputEdges {
+  margin-top: 8px;
+  padding-left: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.outputEdge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #666;
+  padding: 4px 8px;
+  background: #fff;
+  border-radius: 4px;
+
+  .edgeText {
+    flex: 1;
+  }
+}
+
+.outputHint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 8px;
+  background: #fffbe6;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #d48806;
+}

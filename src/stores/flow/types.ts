@@ -7,7 +7,6 @@ import type {
 } from "@xyflow/react";
 import {
   NodeTypeEnum,
-  SourceHandleTypeEnum,
   TargetHandleTypeEnum,
 } from "../../components/flow/nodes";
 import type { HandleDirection } from "../../components/flow/nodes/constants";
@@ -18,28 +17,19 @@ export type PositionType = {
   y: number;
 };
 
-// ========== OneDragon 节点连接类型 ==========
-
-/**
- * 连接条件类型
- * - default: 默认连接（无条件）
- * - success: 成功时连接
- * - fail: 失败时连接
- * - status: 特定状态时连接
- */
-export type EdgeConditionType = 'default' | 'success' | 'fail' | 'status';
+// ========== OneDragon 边连接类型 ==========
 
 // 边属性类型 - OneDragon 风格
 export type EdgeAttributesType = {
-  condition?: EdgeConditionType;  // 连接条件
-  status?: string;                 // 当 condition 为 'status' 时的具体状态值
+  success?: boolean;                 // 执行结果条件: undefined=默认(成功), false=失败
+  status?: string;                   // 状态值（决定出口 Handle）
 };
 
 // 边类型
 export type EdgeType = {
   id: string;
   source: string;
-  sourceHandle: SourceHandleTypeEnum;
+  sourceHandle: string;   // "default" | "status:xxx" 格式
   target: string;
   targetHandle: TargetHandleTypeEnum;
   label?: string | number;
@@ -49,6 +39,15 @@ export type EdgeType = {
 };
 
 // ========== OneDragon 节点属性类型 ==========
+
+/**
+ * @operation_node 装饰器参数
+ */
+export type OperationNodeParams = {
+  name: string;                   // 节点名称
+  is_start_node?: boolean;        // 是否为起始节点
+  save_status?: boolean;          // 是否保存状态
+};
 
 /**
  * @node_from 装饰器参数 - 定义来源连接
@@ -146,6 +145,7 @@ export type PipelineNodeDataType = {
   comment?: string;                        // 节点注释/描述
   code?: string;                           // 方法体代码
   handleDirection?: HandleDirection;       // 端点方向
+  handleOrder?: string[];                  // 出口顺序 (sourceHandle 列表)
   type?: NodeTypeEnum;
 };
 
@@ -319,3 +319,29 @@ export type FlowStore = FlowViewState &
   FlowEdgeState &
   FlowGraphState &
   FlowPathState;
+
+// ========== 解析相关类型 ==========
+
+/**
+ * 解析后的 OneDragon 类信息
+ */
+export type ParsedOneDragonClass = {
+  className: string;                      // 类名
+  baseClass?: string;                     // 基类名
+  imports: string[];                      // 导入语句
+  classVars: Record<string, string>;      // 类变量 (如 STATUS_NO_PLAN)
+  initCode?: string;                      // __init__ 方法代码
+  nodes: ParsedOneDragonNode[];           // 解析的节点列表
+};
+
+/**
+ * 解析后的 OneDragon 节点
+ */
+export type ParsedOneDragonNode = {
+  methodName: string;                     // 方法名
+  operationNode: OperationNodeParams;     // @operation_node 参数
+  nodeFromList: NodeFromParams[];         // @node_from 参数列表
+  nodeNotifyList?: NodeNotifyParams[];    // @node_notify 参数列表
+  code: string;                           // 方法体代码
+  docstring?: string;                     // 文档字符串
+};

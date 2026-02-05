@@ -1,944 +1,746 @@
 import style from "../../../styles/FieldPanel.module.less";
-import { memo, useMemo, useCallback, lazy, Suspense } from "react";
-import { Popover, Input, Select, Spin, Modal, InputNumber } from "antd";
-import classNames from "classnames";
+import { memo, useMemo, useCallback, lazy, useState, useEffect } from "react";
+import { Input, Switch, Collapse, Button, message, Modal, Select, Popconfirm, Tag, Empty } from "antd";
+import { HolderOutlined } from "@ant-design/icons";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
 import IconFont from "../../iconfonts";
 import { useFlowStore, type PipelineNodeType } from "../../../stores/flow";
-import {
-  recoFields,
-  actionFields,
-  otherFieldParamsWithoutFocus,
-  otherFieldSchema,
-} from "../../../core/fields";
-import { JsonHelper } from "../../../utils/jsonHelper";
-import { AddFieldElem, ParamFieldListElem } from "../field/items";
+import { NotifyTimingOptions } from "../../../core/fields/onedragon/enums";
+import Editor from "@monaco-editor/react";
 
 const { TextArea } = Input;
 
-function LeftTipContentElem(content: string) {
-  return <div style={{ maxWidth: 260 }}>{content}</div>;
+interface NodeNotify {
+  when: string;
+  detail?: boolean;
 }
 
+/**
+ * 可排序的出口项组件
+ */
+interface SortableOutputItemProps {
+  handle: string;
+  displayName: string;
+  edges: {
+    edgeId: string;
+    targetLabel: string;
+    success?: boolean;
+  }[];
+}
+
+const SortableOutputItem = memo(({
+  handle,
+  displayName,
+  edges,
+}: SortableOutputItemProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: handle });
+
+  const itemStyle: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const getEdgeDisplayText = (edge: typeof edges[0]): string => {
+    const parts = [`→ ${edge.targetLabel}`];
+    if (edge.success === false) {
+      parts.push("(失败)");
+    }
+    return parts.join(" ");
+  };
+
+  return (
+    <div ref={setNodeRef} style={itemStyle} className={style.outputGroup}>
+      <div className={style.outputHandle}>
+        <HolderOutlined
+          className={style.dragHandle}
+          {...attributes}
+          {...listeners}
+        />
+        <Tag color={handle === "default" ? "blue" : "green"}>
+          {displayName}
+        </Tag>
+        <span className={style.edgeCount}>
+          {edges.length > 0 ? `${edges.length} 条连接` : "未连接"}
+        </span>
+      </div>
+      {edges.length > 0 && (
+        <div className={style.outputEdges}>
+          {edges.map((edge) => (
+            <div key={edge.edgeId} className={style.outputEdge}>
+              <span className={style.edgeText}>
+                {getEdgeDisplayText(edge)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
+/**
+ * 代码编辑弹窗组件 - 使用 Monaco Editor
+ */
+const CodeEditorModal = memo(({
+  open,
+  title,
+  code,
+  onOk,
+  onCancel,
+}: {
+  open: boolean;
+  title: string;
+  code: string;
+  onOk: (code: string) => void;
+  onCancel: () => void;
+}) => {
+  const [editingCode, setEditingCode] = useState(code);
+
+  useEffect(() => {
+    if (open) {
+      setEditingCode(code);
+    }
+  }, [open, code]);
+
+  // 阻止键盘事件冒泡到 Modal
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    e.stopPropagation();
+  }, []);
+
+  return (
+    <Modal
+      title={title}
+      open={open}
+      onOk={() => onOk(editingCode)}
+      onCancel={onCancel}
+      width={800}
+      okText="确定"
+      cancelText="取消"
+      styles={{ body: { padding: "12px 0" } }}
+      keyboard={false}
+    >
+      <div
+        className={style.monacoContainer}
+        onKeyDown={handleKeyDown}
+        onKeyUp={handleKeyDown}
+      >
+        <Editor
+          height="400px"
+          language="python"
+          value={editingCode}
+          onChange={(value) => setEditingCode(value || "")}
+          theme="vs-dark"
+          options={{
+            minimap: { enabled: false },
+            fontSize: 14,
+            lineNumbers: "on",
+            scrollBeyondLastLine: false,
+            wordWrap: "on",
+            automaticLayout: true,
+            tabSize: 4,
+            insertSpaces: true,
+            folding: true,
+            renderLineHighlight: "all",
+            scrollbar: {
+              verticalScrollbarSize: 10,
+              horizontalScrollbarSize: 10,
+            },
+            padding: { top: 10, bottom: 10 },
+            // 确保键盘输入正常
+            acceptSuggestionOnEnter: "on",
+            quickSuggestions: true,
+            autoClosingBrackets: "always",
+            autoClosingQuotes: "always",
+          }}
+        />
+      </div>
+    </Modal>
+  );
+});
+
+/**
+ * Pipeline 节点编辑器 (OneDragon 风格)
+ */
 export const PipelineEditor = lazy(() =>
   Promise.resolve({
     default: memo(({ currentNode }: { currentNode: PipelineNodeType }) => {
       const setNodeData = useFlowStore((state) => state.setNodeData);
+      const [copied, setCopied] = useState(false);
+      const [codeModalOpen, setCodeModalOpen] = useState(false);
 
-      // 字段
-      const recoOptions = useMemo(
-        () =>
-          Object.keys(recoFields).map((key) => ({
-            label: key,
-            value: key,
-          })),
-        []
-      );
-      const actionOptions = useMemo(
-        () =>
-          Object.keys(actionFields).map((key) => ({
-            label: key,
-            value: key,
-          })),
-        []
-      );
-
-      // 标题
+      // 节点名称
       const currentLabel = useMemo(
         () => currentNode.data.label || "",
         [currentNode.data.label]
       );
       const onLabelChange = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) => {
-          setNodeData(currentNode.id, "", "label", e.target.value);
+          setNodeData(currentNode.id, "data", "label", e.target.value);
         },
-        [currentNode]
+        [currentNode.id, setNodeData]
       );
 
-      // 识别算法
-      const currentRecoName = useMemo(
-        () => currentNode.data.recognition.type || "DirectHit",
-        [currentNode.data.recognition.type]
+      // 方法名
+      const methodName = useMemo(
+        () => currentNode.data.methodName || "",
+        [currentNode.data.methodName]
       );
-      const currentReco = useMemo(
-        () => recoFields[currentRecoName],
-        [currentRecoName]
-      );
-      const handleRecoChange = useCallback(
-        (value: string) => {
-          setNodeData(currentNode.id, "type", "recognition", value);
-        },
-        [currentNode]
-      );
-
-      // 动作
-      const currentActionName = useMemo(
-        () => currentNode.data.action.type || "DoNothing",
-        [currentNode.data.action.type]
-      );
-      const currentAction = useMemo(
-        () => actionFields[currentActionName],
-        [currentActionName]
-      );
-      const handleActionChange = useCallback(
-        (value: string) => {
-          setNodeData(currentNode.id, "type", "action", value);
-        },
-        [currentNode]
-      );
-
-      // 自定义节点
-      const currentExtra = useMemo(() => {
-        const extra = currentNode.data.extras;
-        return JsonHelper.objToString(extra) ?? extra;
-      }, [currentNode]);
-      const handleExtraChange = useCallback(
-        (value: string) => {
-          setNodeData(currentNode.id, "extras", "extras", value);
-        },
-        [currentNode]
-      );
-
-      // focus 字段状态判断
-      const currentFocus = useMemo(
-        () => currentNode.data.others.focus,
-        [currentNode.data.others.focus]
-      );
-      const isFocusObjectMode = useMemo(() => {
-        return (
-          typeof currentFocus === "object" &&
-          currentFocus !== null &&
-          !Array.isArray(currentFocus) &&
-          Object.keys(currentFocus).length > 0
-        );
-      }, [currentFocus]);
-
-      // focus 字段更新处理
-      const handleFocusStringChange = useCallback(
+      const onMethodNameChange = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) => {
-          setNodeData(currentNode.id, "others", "focus", e.target.value);
+          setNodeData(currentNode.id, "data", "methodName", e.target.value);
         },
-        [currentNode]
+        [currentNode.id, setNodeData]
       );
 
-      const handleFocusFieldAdd = useCallback(
-        (param: any) => {
-          const currentFocusValue = currentNode.data.others.focus;
-          // 字符串有内容时提示
-          if (
-            typeof currentFocusValue === "string" &&
-            currentFocusValue.trim() !== ""
-          ) {
-            Modal.confirm({
-              title: "切换到结构化模式",
-              content: "切换到结构化模式会丢失当前的字符串值,是否继续?",
-              onOk: () => {
-                const newFocus = { [param.key]: param.default };
-                setNodeData(currentNode.id, "others", "focus", newFocus);
-              },
+      // 是否为起始节点
+      const isStartNode = useMemo(
+        () => currentNode.data.isStartNode || false,
+        [currentNode.data.isStartNode]
+      );
+      const onStartNodeChange = useCallback(
+        (checked: boolean) => {
+          setNodeData(currentNode.id, "data", "isStartNode", checked);
+        },
+        [currentNode.id, setNodeData]
+      );
+
+      // 是否保存状态
+      const saveStatus = useMemo(
+        () => currentNode.data.saveStatus || false,
+        [currentNode.data.saveStatus]
+      );
+      const onSaveStatusChange = useCallback(
+        (checked: boolean) => {
+          setNodeData(currentNode.id, "data", "saveStatus", checked);
+        },
+        [currentNode.id, setNodeData]
+      );
+
+      // 方法体代码
+      const code = useMemo(
+        () => currentNode.data.code || "return self.round_success()",
+        [currentNode.data.code]
+      );
+      const onCodeSave = useCallback(
+        (newCode: string) => {
+          setNodeData(currentNode.id, "data", "code", newCode);
+          setCodeModalOpen(false);
+          message.success("代码已保存");
+        },
+        [currentNode.id, setNodeData]
+      );
+
+      // 注释
+      const comment = useMemo(
+        () => currentNode.data.comment || "",
+        [currentNode.data.comment]
+      );
+      const onCommentChange = useCallback(
+        (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+          setNodeData(currentNode.id, "data", "comment", e.target.value);
+        },
+        [currentNode.id, setNodeData]
+      );
+
+      // 通知配置
+      const nodeNotify = useMemo<NodeNotify[]>(
+        () => currentNode.data.nodeNotify || [],
+        [currentNode.data.nodeNotify]
+      );
+
+      // 添加通知
+      const onAddNotify = useCallback(() => {
+        const newNotify: NodeNotify = {
+          when: NotifyTimingOptions[0].value,
+          detail: false,
+        };
+        setNodeData(currentNode.id, "data", "nodeNotify", [...nodeNotify, newNotify]);
+      }, [currentNode.id, setNodeData, nodeNotify]);
+
+      // 删除通知
+      const onRemoveNotify = useCallback((index: number) => {
+        const newNotify = nodeNotify.filter((_, i) => i !== index);
+        setNodeData(currentNode.id, "data", "nodeNotify", newNotify);
+      }, [currentNode.id, setNodeData, nodeNotify]);
+
+      // 更新通知的 when
+      const onNotifyWhenChange = useCallback((index: number, when: string) => {
+        const newNotify = [...nodeNotify];
+        newNotify[index] = { ...newNotify[index], when };
+        setNodeData(currentNode.id, "data", "nodeNotify", newNotify);
+      }, [currentNode.id, setNodeData, nodeNotify]);
+
+      // 更新通知的 detail
+      const onNotifyDetailChange = useCallback((index: number, detail: boolean) => {
+        const newNotify = [...nodeNotify];
+        newNotify[index] = { ...newNotify[index], detail };
+        setNodeData(currentNode.id, "data", "nodeNotify", newNotify);
+      }, [currentNode.id, setNodeData, nodeNotify]);
+
+      // ========== 出口管理 ==========
+      const edges = useFlowStore((state) => state.edges);
+      const nodes = useFlowStore((state) => state.nodes);
+
+      // 获取此节点的所有出口信息
+      const nodeOutputs = useMemo(() => {
+        const outputs: {
+          handle: string;
+          status?: string;
+          success?: boolean;
+          targetLabel: string;
+          edgeId: string;
+        }[] = [];
+
+        edges.forEach((edge) => {
+          if (edge.source === currentNode.id) {
+            const handle = String(edge.sourceHandle || "default");
+            let status: string | undefined;
+
+            // 从 handle 解析 status
+            if (handle.startsWith("status:")) {
+              status = handle.replace("status:", "");
+            }
+
+            // 找到目标节点名称
+            const targetNode = nodes.find((n) => n.id === edge.target);
+            const targetLabel = targetNode?.data?.label || "未知节点";
+
+            outputs.push({
+              handle,
+              status,
+              success: edge.attributes?.success as boolean | undefined,
+              targetLabel,
+              edgeId: edge.id,
             });
-          } else {
-            // 直接添加
-            const newFocus =
-              typeof currentFocusValue === "object" &&
-              currentFocusValue !== null
-                ? { ...currentFocusValue, [param.key]: param.default }
-                : { [param.key]: param.default };
-            setNodeData(currentNode.id, "others", "focus", newFocus);
           }
-        },
-        [currentNode]
-      );
+        });
 
-      const handleFocusFieldChange = useCallback(
-        (key: string, value: any) => {
-          const currentFocusValue = currentNode.data.others.focus;
-          if (
-            typeof currentFocusValue === "object" &&
-            currentFocusValue !== null
-          ) {
-            const newFocus = { ...currentFocusValue, [key]: value };
-            setNodeData(currentNode.id, "others", "focus", newFocus);
+        return outputs;
+      }, [edges, nodes, currentNode.id]);
+
+      // 获取唯一出口列表（用于显示），按存储的顺序排列
+      const uniqueHandles = useMemo(() => {
+        const handleSet = new Set<string>();
+        handleSet.add("default"); // 默认出口始终存在
+
+        nodeOutputs.forEach((output) => {
+          handleSet.add(output.handle);
+        });
+
+        // 如果有存储的顺序，使用存储的顺序
+        const savedOrder = currentNode.data.handleOrder || [];
+        const allHandles = Array.from(handleSet);
+
+        // 按照保存的顺序排列，新的出口添加到末尾
+        const sortedHandles: string[] = [];
+
+        // 首先添加保存顺序中存在的出口
+        for (const handle of savedOrder) {
+          if (allHandles.includes(handle)) {
+            sortedHandles.push(handle);
           }
-        },
-        [currentNode]
-      );
+        }
 
-      const handleFocusFieldDelete = useCallback(
-        (key: string) => {
-          const currentFocusValue = currentNode.data.others.focus;
-          if (
-            typeof currentFocusValue === "object" &&
-            currentFocusValue !== null
-          ) {
-            const newFocus = { ...currentFocusValue };
-            delete newFocus[key];
-            // 回退到字符串模式
-            if (Object.keys(newFocus).length === 0) {
-              setNodeData(currentNode.id, "others", "focus", "");
+        // 然后添加不在保存顺序中的出口
+        for (const handle of allHandles) {
+          if (!sortedHandles.includes(handle)) {
+            // default 始终在最前面（如果不在保存顺序中）
+            if (handle === "default") {
+              sortedHandles.unshift(handle);
             } else {
-              setNodeData(currentNode.id, "others", "focus", newFocus);
+              sortedHandles.push(handle);
             }
           }
-        },
-        [currentNode]
+        }
+
+        return sortedHandles;
+      }, [nodeOutputs, currentNode.data.handleOrder]);
+
+      // 拖拽排序传感器
+      const sensors = useSensors(
+        useSensor(PointerSensor, {
+          activationConstraint: { distance: 5 },
+        })
       );
 
-      // waitFreezes 可见性判断
-      const hasPreWaitFreezes = useMemo(
-        () => "pre_wait_freezes" in currentNode.data.others,
-        [currentNode.data.others]
-      );
-      const hasPostWaitFreezes = useMemo(
-        () => "post_wait_freezes" in currentNode.data.others,
-        [currentNode.data.others]
-      );
-      const hasRepeatWaitFreezes = useMemo(
-        () => "repeat_wait_freezes" in currentNode.data.others,
-        [currentNode.data.others]
-      );
+      // 拖拽结束处理
+      const handleDragEnd = useCallback((event: DragEndEvent) => {
+        const { active, over } = event;
 
-      // waitFreezes 字段状态判断
-      const isWaitFreezesObjectMode = useCallback((value: any): boolean => {
-        return (
-          typeof value === "object" &&
-          value !== null &&
-          !Array.isArray(value) &&
-          Object.keys(value).length > 0
-        );
+        if (over && active.id !== over.id) {
+          const oldIndex = uniqueHandles.indexOf(String(active.id));
+          const newIndex = uniqueHandles.indexOf(String(over.id));
+
+          if (oldIndex !== -1 && newIndex !== -1) {
+            const newOrder = arrayMove(uniqueHandles, oldIndex, newIndex);
+            setNodeData(currentNode.id, "data", "handleOrder", newOrder);
+            // handleOrder 更新后，PipelineNodeHandles 组件会自动处理
+            // updateNodeInternals 的调用（因为它订阅了 nodes store）
+          }
+        }
+      }, [uniqueHandles, currentNode.id, setNodeData]);
+
+      // 获取出口的显示名称
+      const getHandleDisplayName = useCallback((handle: string): string => {
+        if (handle === "default") return "默认出口";
+        if (handle.startsWith("status:")) {
+          const status = handle.replace("status:", "");
+          return `状态: ${status}`;
+        }
+        return handle;
       }, []);
 
-      // pre_wait_freezes
-      const currentPreWaitFreezes = useMemo(
-        () => currentNode.data.others.pre_wait_freezes,
-        [currentNode.data.others.pre_wait_freezes]
-      );
-      const isPreWaitFreezesObjectMode = useMemo(
-        () => isWaitFreezesObjectMode(currentPreWaitFreezes),
-        [currentPreWaitFreezes, isWaitFreezesObjectMode]
-      );
-
-      // post_wait_freezes
-      const currentPostWaitFreezes = useMemo(
-        () => currentNode.data.others.post_wait_freezes,
-        [currentNode.data.others.post_wait_freezes]
-      );
-      const isPostWaitFreezesObjectMode = useMemo(
-        () => isWaitFreezesObjectMode(currentPostWaitFreezes),
-        [currentPostWaitFreezes, isWaitFreezesObjectMode]
-      );
-
-      // repeat_wait_freezes
-      const currentRepeatWaitFreezes = useMemo(
-        () => currentNode.data.others.repeat_wait_freezes,
-        [currentNode.data.others.repeat_wait_freezes]
-      );
-      const isRepeatWaitFreezesObjectMode = useMemo(
-        () => isWaitFreezesObjectMode(currentRepeatWaitFreezes),
-        [currentRepeatWaitFreezes, isWaitFreezesObjectMode]
-      );
-
-      // waitFreezes int 值变更处理
-      const handleWaitFreezesIntChange = useCallback(
-        (fieldKey: string, value: number | null) => {
-          setNodeData(currentNode.id, "others", fieldKey, value ?? 0);
+      // 获取出口下的边列表
+      const getEdgesForHandle = useCallback(
+        (handle: string) => {
+          return nodeOutputs.filter((output) => output.handle === handle);
         },
-        [currentNode]
+        [nodeOutputs]
       );
 
-      // waitFreezes 添加子字段处理
-      const handleWaitFreezesFieldAdd = useCallback(
-        (fieldKey: string, param: any) => {
-          const currentValue = currentNode.data.others[fieldKey];
-          // 有 int 值时提示
-          if (typeof currentValue === "number" && currentValue !== 0) {
-            Modal.confirm({
-              title: "切换到结构化模式",
-              content: "切换到结构化模式会丢失当前的数值，是否继续?",
-              onOk: () => {
-                const newValue = { [param.key]: param.default };
-                setNodeData(currentNode.id, "others", fieldKey, newValue);
-              },
-            });
-          } else {
-            // 直接添加
-            const newValue =
-              typeof currentValue === "object" && currentValue !== null
-                ? { ...currentValue, [param.key]: param.default }
-                : { [param.key]: param.default };
-            setNodeData(currentNode.id, "others", fieldKey, newValue);
-          }
-        },
-        [currentNode]
-      );
+      // 生成 Python 代码预览
+      const pythonCode = useMemo(() => {
+        const lines: string[] = [];
 
-      // 通用的 waitFreezes 子字段变更处理
-      const handleWaitFreezesFieldChange = useCallback(
-        (fieldKey: string, key: string, value: any) => {
-          const currentValue = currentNode.data.others[fieldKey];
-          if (typeof currentValue === "object" && currentValue !== null) {
-            const newValue = { ...currentValue, [key]: value };
-            setNodeData(currentNode.id, "others", fieldKey, newValue);
-          }
-        },
-        [currentNode]
-      );
-
-      // 通用的 waitFreezes 子字段删除处理
-      const handleWaitFreezesFieldDelete = useCallback(
-        (fieldKey: string, key: string) => {
-          const currentValue = currentNode.data.others[fieldKey];
-          if (typeof currentValue === "object" && currentValue !== null) {
-            const newValue = { ...currentValue };
-            delete newValue[key];
-            // 回退到 int 模式
-            if (Object.keys(newValue).length === 0) {
-              setNodeData(currentNode.id, "others", fieldKey, 0);
-            } else {
-              setNodeData(currentNode.id, "others", fieldKey, newValue);
+        // 添加 node_from 装饰器
+        if (currentNode.data.nodeFrom && currentNode.data.nodeFrom.length > 0) {
+          for (const from of currentNode.data.nodeFrom) {
+            const params: string[] = [`from_name="${from.from_name}"`];
+            if (from.success !== undefined) {
+              params.push(`success=${from.success ? "True" : "False"}`);
             }
+            if (from.status !== undefined) {
+              params.push(`status="${from.status}"`);
+            }
+            lines.push(`    @node_from(${params.join(", ")})`);
           }
+        }
+
+        // 添加 node_notify 装饰器
+        if (nodeNotify.length > 0) {
+          for (const notify of nodeNotify) {
+            const params: string[] = [`when=${notify.when}`];
+            if (notify.detail !== undefined) {
+              params.push(`detail=${notify.detail ? "True" : "False"}`);
+            }
+            lines.push(`    @node_notify(${params.join(", ")})`);
+          }
+        }
+
+        // 添加 operation_node 装饰器
+        const opParams: string[] = [`name="${currentLabel}"`];
+        if (isStartNode) {
+          opParams.push("is_start_node=True");
+        }
+        if (saveStatus) {
+          opParams.push("save_status=True");
+        }
+        lines.push(`    @operation_node(${opParams.join(", ")})`);
+
+        // 添加方法定义
+        lines.push(`    def ${methodName}(self) -> OperationRoundResult:`);
+
+        // 添加文档字符串
+        if (comment) {
+          lines.push(`        """${comment}"""`);
+        }
+
+        // 添加方法体
+        const codeLines = code.split("\n");
+        for (const line of codeLines) {
+          lines.push(`        ${line}`);
+        }
+
+        return lines.join("\n");
+      }, [currentNode.data, currentLabel, methodName, isStartNode, saveStatus, code, comment, nodeNotify]);
+
+      // 复制代码
+      const handleCopyCode = useCallback(() => {
+        navigator.clipboard.writeText(pythonCode).then(() => {
+          setCopied(true);
+          message.success("代码已复制到剪贴板");
+          setTimeout(() => setCopied(false), 2000);
+        });
+      }, [pythonCode]);
+
+      // 代码预览（简短版本）
+      const codePreviewShort = useMemo(() => {
+        const lines = code.split("\n");
+        if (lines.length <= 2) return code;
+        return lines.slice(0, 2).join("\n") + "\n...";
+      }, [code]);
+
+      // Collapse 配置
+      const collapseItems = [
+        {
+          key: "basic",
+          label: (
+            <div className={style.collapseHeader}>
+              <IconFont name="icon-biaodanmoban" size={16} />
+              <span>基本属性</span>
+            </div>
+          ),
+          children: (
+            <div className={style.section}>
+              <div className={style.field}>
+                <label>节点名称</label>
+                <Input
+                  value={currentLabel}
+                  onChange={onLabelChange}
+                  placeholder="输入节点名称"
+                />
+              </div>
+              <div className={style.field}>
+                <label>方法名</label>
+                <Input
+                  value={methodName}
+                  onChange={onMethodNameChange}
+                  placeholder="输入方法名"
+                  addonBefore="def"
+                  addonAfter="(self)"
+                />
+              </div>
+              <div className={style.fieldRow}>
+                <div className={style.switchField}>
+                  <label>起始节点</label>
+                  <Switch checked={isStartNode} onChange={onStartNodeChange} />
+                </div>
+                <div className={style.switchField}>
+                  <label>保存状态</label>
+                  <Switch checked={saveStatus} onChange={onSaveStatusChange} />
+                </div>
+              </div>
+            </div>
+          ),
         },
-        [currentNode]
-      );
+        {
+          key: "code",
+          label: (
+            <div className={style.collapseHeader}>
+              <IconFont name="icon-daima" size={16} />
+              <span>方法代码</span>
+            </div>
+          ),
+          children: (
+            <div className={style.section}>
+              <div className={style.field}>
+                <label>注释/说明</label>
+                <TextArea
+                  value={comment}
+                  onChange={onCommentChange}
+                  placeholder="输入方法说明（可选）"
+                  autoSize={{ minRows: 1, maxRows: 3 }}
+                />
+              </div>
+              <div className={style.field}>
+                <label>方法体</label>
+                <div
+                  className={style.codeClickable}
+                  onClick={() => setCodeModalOpen(true)}
+                  title="点击编辑代码"
+                >
+                  <pre className={style.codePreviewSmall}>{codePreviewShort}</pre>
+                  <div className={style.codeEditHint}>
+                    <IconFont name="icon-daima" size={14} />
+                    <span>点击编辑代码</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ),
+        },
+        {
+          key: "notify",
+          label: (
+            <div className={style.collapseHeader}>
+              <IconFont name="icon-rizhi" size={16} />
+              <span>通知配置 {nodeNotify.length > 0 ? `(${nodeNotify.length})` : ""}</span>
+            </div>
+          ),
+          children: (
+            <div className={style.section}>
+              {nodeNotify.length > 0 ? (
+                <div className={style.notifyList}>
+                  {nodeNotify.map((notify, index) => (
+                    <div key={index} className={style.notifyItem}>
+                      <Select
+                        size="small"
+                        value={notify.when}
+                        onChange={(value) => onNotifyWhenChange(index, value)}
+                        options={NotifyTimingOptions}
+                        className={style.notifySelect}
+                      />
+                      <div className={style.notifyDetailSwitch}>
+                        <span>详情</span>
+                        <Switch
+                          size="small"
+                          checked={notify.detail || false}
+                          onChange={(checked) => onNotifyDetailChange(index, checked)}
+                        />
+                      </div>
+                      <Popconfirm
+                        title="确定删除此通知配置？"
+                        onConfirm={() => onRemoveNotify(index)}
+                        okText="确定"
+                        cancelText="取消"
+                      >
+                        <IconFont
+                          name="icon-shanchu"
+                          size={16}
+                          color="#ff4a4a"
+                          className={style.notifyDelete}
+                        />
+                      </Popconfirm>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className={style.emptyTip}>暂无通知配置</div>
+              )}
+              <Button
+                type="dashed"
+                block
+                onClick={onAddNotify}
+                className={style.addNotifyBtn}
+              >
+                <IconFont name="icon-xinjiantianjia" size={14} />
+                添加通知
+              </Button>
+            </div>
+          ),
+        },
+        {
+          key: "outputs",
+          label: (
+            <div className={style.collapseHeader}>
+              <IconFont name="icon-lianjie" size={16} />
+              <span>出口管理 {nodeOutputs.length > 0 ? `(${nodeOutputs.length})` : ""}</span>
+            </div>
+          ),
+          children: (
+            <div className={style.section}>
+              {uniqueHandles.length > 0 ? (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={uniqueHandles}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className={style.outputList}>
+                      {uniqueHandles.map((handle) => {
+                        const edgesForHandle = getEdgesForHandle(handle);
+                        return (
+                          <SortableOutputItem
+                            key={handle}
+                            handle={handle}
+                            displayName={getHandleDisplayName(handle)}
+                            edges={edgesForHandle.map((e) => ({
+                              edgeId: e.edgeId,
+                              targetLabel: e.targetLabel,
+                              success: e.success,
+                            }))}
+                          />
+                        );
+                      })}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              ) : (
+                <Empty
+                  description="暂无出口"
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                />
+              )}
+              <div className={style.outputHint}>
+                <IconFont name="icon-xiaohongshubiaoti" size={14} />
+                <span>拖拽出口可调整顺序，从此节点拖出连线会自动创建出口</span>
+              </div>
+            </div>
+          ),
+        },
+        {
+          key: "preview",
+          label: (
+            <div className={style.collapseHeader}>
+              <IconFont name="icon-tuxiang" size={16} />
+              <span>Python 代码预览</span>
+            </div>
+          ),
+          children: (
+            <div className={style.section}>
+              <div className={style.codePreview}>
+                <div className={style.codeHeader}>
+                  <span>生成的 Python 代码</span>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<IconFont name={copied ? "icon-zidingyi1" : "icon-fuzhi"} size={14} />}
+                    onClick={handleCopyCode}
+                  >
+                    {copied ? "已复制" : "复制"}
+                  </Button>
+                </div>
+                <pre className={style.codeBlock}>{pythonCode}</pre>
+              </div>
+            </div>
+          ),
+        },
+      ];
 
       return (
-        <div className={style.list}>
-          {/* 节点名 */}
-          <div className={style.item}>
-            <Popover
-              placement="left"
-              title={"key"}
-              content={"节点名，会被编译为 pipeline 的 key。"}
-            >
-              <div className={classNames([style.key, style["head-key"]])}>
-                key
-              </div>
-            </Popover>
-            <div className={style.value}>
-              <Input
-                placeholder="节点名"
-                value={currentLabel}
-                onChange={onLabelChange}
-              />
-            </div>
-          </div>
-          {/* 识别算法 */}
-          <div className={style.item}>
-            <Popover
-              style={{ maxWidth: 10 }}
-              placement="left"
-              title={"recognition"}
-              content={LeftTipContentElem(
-                `识别算法(${currentRecoName})：${currentReco.desc}`
-              )}
-            >
-              <div className={classNames([style.key, style["head-key"]])}>
-                recognition
-              </div>
-            </Popover>
-            <div className={style.value}>
-              <Select
-                style={{ width: "100%" }}
-                options={recoOptions}
-                value={currentRecoName}
-                onChange={handleRecoChange}
-              />
-            </div>
-            {currentNode ? (
-              <AddFieldElem
-                paramType={currentReco.params}
-                paramData={currentNode.data.recognition.param}
-                onClick={(param) =>
-                  setNodeData(
-                    currentNode.id,
-                    "recognition",
-                    param.key,
-                    param.default
-                  )
-                }
-              />
-            ) : null}
-          </div>
-          {/* 算法字段 */}
-          {currentNode ? (
-            <ParamFieldListElem
-              paramData={currentNode.data.recognition.param}
-              paramType={
-                recoFields[currentNode.data.recognition.type]?.params || []
-              }
-              onChange={(key, value) =>
-                setNodeData(currentNode.id, "recognition", key, value)
-              }
-              onDelete={(key) =>
-                setNodeData(currentNode.id, "recognition", key, "__mpe_delete")
-              }
-              onListChange={(key, valueList) =>
-                setNodeData(currentNode.id, "recognition", key, valueList)
-              }
-              onListAdd={(key, valueList) => {
-                valueList.push(valueList[valueList.length - 1]);
-                setNodeData(currentNode.id, "recognition", key, valueList);
-              }}
-              onListDelete={(key, valueList, index) => {
-                valueList.splice(index, 1);
-                setNodeData(currentNode.id, "recognition", key, valueList);
-              }}
-            />
-          ) : null}
-          {/* 动作类型 */}
-          <div className={style.item}>
-            <Popover
-              style={{ maxWidth: 10 }}
-              placement="left"
-              title={"action"}
-              content={LeftTipContentElem(
-                `动作类型(${currentActionName})：${currentAction.desc}`
-              )}
-            >
-              <div className={classNames([style.key, style["head-key"]])}>
-                action
-              </div>
-            </Popover>
-            <div className={style.value}>
-              <Select
-                style={{ width: "100%" }}
-                options={actionOptions}
-                value={currentActionName}
-                onChange={handleActionChange}
-              />
-            </div>
-            {currentNode ? (
-              <AddFieldElem
-                paramType={currentAction.params}
-                paramData={currentNode.data.action.param}
-                onClick={(param) =>
-                  setNodeData(
-                    currentNode.id,
-                    "action",
-                    param.key,
-                    param.default
-                  )
-                }
-              />
-            ) : null}
-          </div>
-          {/* 动作字段 */}
-          {currentNode ? (
-            <ParamFieldListElem
-              paramData={currentNode.data.action.param}
-              paramType={
-                actionFields[currentNode.data.action.type]?.params || []
-              }
-              onChange={(key, value) =>
-                setNodeData(currentNode.id, "action", key, value)
-              }
-              onDelete={(key) =>
-                setNodeData(currentNode.id, "action", key, "__mpe_delete")
-              }
-              onListChange={(key, valueList) =>
-                setNodeData(currentNode.id, "action", key, valueList)
-              }
-              onListAdd={(key, valueList) => {
-                valueList.push(valueList[valueList.length - 1]);
-                setNodeData(currentNode.id, "action", key, valueList);
-              }}
-              onListDelete={(key, valueList, index) => {
-                valueList.splice(index, 1);
-                setNodeData(currentNode.id, "action", key, valueList);
-              }}
-            />
-          ) : null}
-          {/* 其他 */}
-          <div className={style.item}>
-            <Popover
-              placement="left"
-              title={"others"}
-              content={"除 recognition、action、focus 之外的字段"}
-            >
-              <div className={classNames([style.key, style["head-key"]])}>
-                others
-              </div>
-            </Popover>
-            <div className={classNames([style.value, style.line])}>
-              ————————————
-            </div>
-            {currentNode ? (
-              <AddFieldElem
-                paramType={[
-                  ...otherFieldParamsWithoutFocus,
-                  otherFieldSchema.preWaitFreezes,
-                  otherFieldSchema.postWaitFreezes,
-                  otherFieldSchema.repeatWaitFreezes,
-                ]}
-                paramData={currentNode.data.others}
-                onClick={(param) =>
-                  setNodeData(
-                    currentNode.id,
-                    "others",
-                    param.key,
-                    param.default
-                  )
-                }
-              />
-            ) : null}
-          </div>
-          {/* 其他字段 */}
-          {currentNode ? (
-            <ParamFieldListElem
-              paramData={currentNode.data.others}
-              paramType={otherFieldParamsWithoutFocus}
-              onChange={(key, value) =>
-                setNodeData(currentNode.id, "others", key, value)
-              }
-              onDelete={(key) =>
-                setNodeData(currentNode.id, "others", key, "__mpe_delete")
-              }
-              onListChange={(key, valueList) =>
-                setNodeData(currentNode.id, "others", key, valueList)
-              }
-              onListAdd={(key, valueList) => {
-                valueList.push(valueList[valueList.length - 1]);
-                setNodeData(currentNode.id, "others", key, valueList);
-              }}
-              onListDelete={(key, valueList, index) => {
-                valueList.splice(index, 1);
-                setNodeData(currentNode.id, "others", key, valueList);
-              }}
-            />
-          ) : null}
-          {/* pre_wait_freezes 字段*/}
-          {hasPreWaitFreezes ? (
-            <>
-              <div className={style.item}>
-                <Popover
-                  style={{ maxWidth: 10 }}
-                  placement="left"
-                  title={"pre_wait_freezes"}
-                  content={LeftTipContentElem(
-                    otherFieldSchema.preWaitFreezes.desc
-                  )}
-                >
-                  <div className={classNames([style.key, style["head-key"]])}>
-                    pre_wait_freezes
-                  </div>
-                </Popover>
-                {isPreWaitFreezesObjectMode ? (
-                  <>
-                    <div className={classNames([style.value, style.line])}>
-                      ——————————
-                    </div>
-                    {currentNode && otherFieldSchema.preWaitFreezes.params ? (
-                      <AddFieldElem
-                        paramType={otherFieldSchema.preWaitFreezes.params}
-                        paramData={
-                          typeof currentPreWaitFreezes === "object" &&
-                          currentPreWaitFreezes !== null
-                            ? currentPreWaitFreezes
-                            : {}
-                        }
-                        onClick={(param) =>
-                          handleWaitFreezesFieldAdd("pre_wait_freezes", param)
-                        }
-                      />
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    <div className={style.value}>
-                      <InputNumber
-                        style={{ width: "100%" }}
-                        placeholder="等待时间(毫秒)，或点击右侧添加详细参数"
-                        value={
-                          typeof currentPreWaitFreezes === "number"
-                            ? currentPreWaitFreezes
-                            : 0
-                        }
-                        onChange={(value) =>
-                          handleWaitFreezesIntChange("pre_wait_freezes", value)
-                        }
-                      />
-                    </div>
-                    {currentNode && otherFieldSchema.preWaitFreezes.params ? (
-                      <AddFieldElem
-                        paramType={otherFieldSchema.preWaitFreezes.params}
-                        paramData={{}}
-                        onClick={(param) =>
-                          handleWaitFreezesFieldAdd("pre_wait_freezes", param)
-                        }
-                      />
-                    ) : null}
-                  </>
-                )}
-                <div className={style.operation}>
-                  <IconFont
-                    className="icon-interactive"
-                    style={{ width: 20 }}
-                    name="icon-lanzilajitongshanchu"
-                    size={16}
-                    onClick={() =>
-                      setNodeData(
-                        currentNode.id,
-                        "others",
-                        "pre_wait_freezes",
-                        "__mpe_delete"
-                      )
-                    }
-                  />
-                </div>
-              </div>
-              {/* pre_wait_freezes 子字段 */}
-              {isPreWaitFreezesObjectMode && currentNode ? (
-                <ParamFieldListElem
-                  paramData={
-                    typeof currentPreWaitFreezes === "object" &&
-                    currentPreWaitFreezes !== null
-                      ? currentPreWaitFreezes
-                      : {}
-                  }
-                  paramType={otherFieldSchema.preWaitFreezes.params || []}
-                  onChange={(key, value) =>
-                    handleWaitFreezesFieldChange("pre_wait_freezes", key, value)
-                  }
-                  onDelete={(key) =>
-                    handleWaitFreezesFieldDelete("pre_wait_freezes", key)
-                  }
-                  onListChange={() => {}}
-                  onListAdd={() => {}}
-                  onListDelete={() => {}}
-                />
-              ) : null}
-            </>
-          ) : null}
-          {/* post_wait_freezes 字段*/}
-          {hasPostWaitFreezes ? (
-            <>
-              <div className={style.item}>
-                <Popover
-                  style={{ maxWidth: 10 }}
-                  placement="left"
-                  title={"post_wait_freezes"}
-                  content={LeftTipContentElem(
-                    otherFieldSchema.postWaitFreezes.desc
-                  )}
-                >
-                  <div className={classNames([style.key, style["head-key"]])}>
-                    post_wait_freezes
-                  </div>
-                </Popover>
-                {isPostWaitFreezesObjectMode ? (
-                  <>
-                    <div className={classNames([style.value, style.line])}>
-                      ——————————
-                    </div>
-                    {currentNode && otherFieldSchema.postWaitFreezes.params ? (
-                      <AddFieldElem
-                        paramType={otherFieldSchema.postWaitFreezes.params}
-                        paramData={
-                          typeof currentPostWaitFreezes === "object" &&
-                          currentPostWaitFreezes !== null
-                            ? currentPostWaitFreezes
-                            : {}
-                        }
-                        onClick={(param) =>
-                          handleWaitFreezesFieldAdd("post_wait_freezes", param)
-                        }
-                      />
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    <div className={style.value}>
-                      <InputNumber
-                        style={{ width: "100%" }}
-                        placeholder="等待时间(毫秒)，或点击右侧添加详细参数"
-                        value={
-                          typeof currentPostWaitFreezes === "number"
-                            ? currentPostWaitFreezes
-                            : 0
-                        }
-                        onChange={(value) =>
-                          handleWaitFreezesIntChange("post_wait_freezes", value)
-                        }
-                      />
-                    </div>
-                    {currentNode && otherFieldSchema.postWaitFreezes.params ? (
-                      <AddFieldElem
-                        paramType={otherFieldSchema.postWaitFreezes.params}
-                        paramData={{}}
-                        onClick={(param) =>
-                          handleWaitFreezesFieldAdd("post_wait_freezes", param)
-                        }
-                      />
-                    ) : null}
-                  </>
-                )}
-                <div className={style.operation}>
-                  <IconFont
-                    className="icon-interactive"
-                    style={{ width: 20 }}
-                    name="icon-lanzilajitongshanchu"
-                    size={16}
-                    onClick={() =>
-                      setNodeData(
-                        currentNode.id,
-                        "others",
-                        "post_wait_freezes",
-                        "__mpe_delete"
-                      )
-                    }
-                  />
-                </div>
-              </div>
-              {/* post_wait_freezes 子字段 */}
-              {isPostWaitFreezesObjectMode && currentNode ? (
-                <ParamFieldListElem
-                  paramData={
-                    typeof currentPostWaitFreezes === "object" &&
-                    currentPostWaitFreezes !== null
-                      ? currentPostWaitFreezes
-                      : {}
-                  }
-                  paramType={otherFieldSchema.postWaitFreezes.params || []}
-                  onChange={(key, value) =>
-                    handleWaitFreezesFieldChange(
-                      "post_wait_freezes",
-                      key,
-                      value
-                    )
-                  }
-                  onDelete={(key) =>
-                    handleWaitFreezesFieldDelete("post_wait_freezes", key)
-                  }
-                  onListChange={() => {}}
-                  onListAdd={() => {}}
-                  onListDelete={() => {}}
-                />
-              ) : null}
-            </>
-          ) : null}
-          {/* repeat_wait_freezes 字段*/}
-          {hasRepeatWaitFreezes ? (
-            <>
-              <div className={style.item}>
-                <Popover
-                  style={{ maxWidth: 10 }}
-                  placement="left"
-                  title={"repeat_wait_freezes"}
-                  content={LeftTipContentElem(
-                    otherFieldSchema.repeatWaitFreezes.desc
-                  )}
-                >
-                  <div className={classNames([style.key, style["head-key"]])}>
-                    repeat_wait_freezes
-                  </div>
-                </Popover>
-                {isRepeatWaitFreezesObjectMode ? (
-                  <>
-                    <div className={classNames([style.value, style.line])}>
-                      ——————————
-                    </div>
-                    {currentNode &&
-                    otherFieldSchema.repeatWaitFreezes.params ? (
-                      <AddFieldElem
-                        paramType={otherFieldSchema.repeatWaitFreezes.params}
-                        paramData={
-                          typeof currentRepeatWaitFreezes === "object" &&
-                          currentRepeatWaitFreezes !== null
-                            ? currentRepeatWaitFreezes
-                            : {}
-                        }
-                        onClick={(param) =>
-                          handleWaitFreezesFieldAdd(
-                            "repeat_wait_freezes",
-                            param
-                          )
-                        }
-                      />
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    <div className={style.value}>
-                      <InputNumber
-                        style={{ width: "100%" }}
-                        placeholder="等待时间(毫秒)，或点击右侧添加详细参数"
-                        value={
-                          typeof currentRepeatWaitFreezes === "number"
-                            ? currentRepeatWaitFreezes
-                            : 0
-                        }
-                        onChange={(value) =>
-                          handleWaitFreezesIntChange(
-                            "repeat_wait_freezes",
-                            value
-                          )
-                        }
-                      />
-                    </div>
-                    {currentNode &&
-                    otherFieldSchema.repeatWaitFreezes.params ? (
-                      <AddFieldElem
-                        paramType={otherFieldSchema.repeatWaitFreezes.params}
-                        paramData={{}}
-                        onClick={(param) =>
-                          handleWaitFreezesFieldAdd(
-                            "repeat_wait_freezes",
-                            param
-                          )
-                        }
-                      />
-                    ) : null}
-                  </>
-                )}
-                <div className={style.operation}>
-                  <IconFont
-                    className="icon-interactive"
-                    style={{ width: 20 }}
-                    name="icon-lanzilajitongshanchu"
-                    size={16}
-                    onClick={() =>
-                      setNodeData(
-                        currentNode.id,
-                        "others",
-                        "repeat_wait_freezes",
-                        "__mpe_delete"
-                      )
-                    }
-                  />
-                </div>
-              </div>
-              {/* repeat_wait_freezes 子字段 */}
-              {isRepeatWaitFreezesObjectMode && currentNode ? (
-                <ParamFieldListElem
-                  paramData={
-                    typeof currentRepeatWaitFreezes === "object" &&
-                    currentRepeatWaitFreezes !== null
-                      ? currentRepeatWaitFreezes
-                      : {}
-                  }
-                  paramType={otherFieldSchema.repeatWaitFreezes.params || []}
-                  onChange={(key, value) =>
-                    handleWaitFreezesFieldChange(
-                      "repeat_wait_freezes",
-                      key,
-                      value
-                    )
-                  }
-                  onDelete={(key) =>
-                    handleWaitFreezesFieldDelete("repeat_wait_freezes", key)
-                  }
-                  onListChange={() => {}}
-                  onListAdd={() => {}}
-                  onListDelete={() => {}}
-                />
-              ) : null}
-            </>
-          ) : null}
-          {/* focus 字段*/}
-          <div className={style.item}>
-            <Popover
-              style={{ maxWidth: 10 }}
-              placement="left"
-              title={"focus"}
-              content={LeftTipContentElem(
-                "关注节点，会额外产生部分回调消息。可选，默认 null，不产生回调消息。详见 节点通知。"
-              )}
-            >
-              <div className={classNames([style.key, style["head-key"]])}>
-                focus
-              </div>
-            </Popover>
-            {isFocusObjectMode ? (
-              <>
-                <div className={classNames([style.value, style.line])}>
-                  ————————————
-                </div>
-                {currentNode && otherFieldSchema.focus.params ? (
-                  <AddFieldElem
-                    paramType={otherFieldSchema.focus.params}
-                    paramData={
-                      typeof currentFocus === "object" && currentFocus !== null
-                        ? currentFocus
-                        : {}
-                    }
-                    onClick={handleFocusFieldAdd}
-                  />
-                ) : null}
-              </>
-            ) : (
-              <>
-                <div className={style.value}>
-                  <Input
-                    placeholder="字符串值，或点击右侧按钮添加消息类型"
-                    value={typeof currentFocus === "string" ? currentFocus : ""}
-                    onChange={handleFocusStringChange}
-                  />
-                </div>
-                {currentNode && otherFieldSchema.focus.params ? (
-                  <AddFieldElem
-                    paramType={otherFieldSchema.focus.params}
-                    paramData={{}}
-                    onClick={handleFocusFieldAdd}
-                  />
-                ) : null}
-              </>
-            )}
-          </div>
-          {/* focus 子字段 */}
-          {isFocusObjectMode && currentNode ? (
-            <ParamFieldListElem
-              paramData={
-                typeof currentFocus === "object" && currentFocus !== null
-                  ? currentFocus
-                  : {}
-              }
-              paramType={otherFieldSchema.focus.params || []}
-              onChange={handleFocusFieldChange}
-              onDelete={handleFocusFieldDelete}
-              onListChange={() => {}}
-              onListAdd={() => {}}
-              onListDelete={() => {}}
-            />
-          ) : null}
-          {/* 自定义字段 */}
-          <div className={style.item}>
-            <Popover
-              placement="left"
-              title={"extras"}
-              content={"自定义字段，JSON格式，会直接将一级字段渲染在节点上"}
-            >
-              <div className={classNames([style.key, style["head-key"]])}>
-                extras
-              </div>
-            </Popover>
-            <div className={style.value}>
-              <TextArea
-                placeholder="自定义字段，完整 JSON 格式"
-                autoSize={{ minRows: 1, maxRows: 6 }}
-                value={currentExtra}
-                onChange={(e) => handleExtraChange(e.target.value)}
-              />
-            </div>
-          </div>
+        <div className={style.editor}>
+          <Collapse
+            defaultActiveKey={["basic", "code", "notify", "preview"]}
+            items={collapseItems}
+            bordered={false}
+            expandIconPosition="end"
+          />
+
+          {/* 代码编辑弹窗 */}
+          <CodeEditorModal
+            open={codeModalOpen}
+            title={`编辑方法体 - ${methodName}`}
+            code={code}
+            onOk={onCodeSave}
+            onCancel={() => setCodeModalOpen(false)}
+          />
         </div>
       );
     }),
   })
 );
 
-// 异步初渲染
-export const PipelineEditorWithSuspense = ({
-  currentNode,
-}: {
-  currentNode: PipelineNodeType;
-}) => (
-  <Suspense
-    fallback={
-      <Spin tip="Loading..." size="large">
-        <div className={style.spin}></div>
-      </Spin>
-    }
-  >
-    <PipelineEditor currentNode={currentNode} />
-  </Suspense>
+export const PipelineEditorWithSuspense = memo(
+  ({ currentNode }: { currentNode: PipelineNodeType }) => {
+    return (
+      <div className={style.editorWrapper}>
+        <PipelineEditor currentNode={currentNode} />
+      </div>
+    );
+  }
 );

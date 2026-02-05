@@ -14,8 +14,37 @@ import { useShallow } from "zustand/shallow";
 import { useConfigStore } from "../../stores/configStore";
 import { useFlowStore } from "../../stores/flow";
 import { useDebugStore } from "../../stores/debugStore";
-import { SourceHandleTypeEnum, TargetHandleTypeEnum, getHandlePositions, DEFAULT_HANDLE_DIRECTION } from "./nodes";
+import { getHandlePositions, DEFAULT_HANDLE_DIRECTION } from "./nodes";
 import type { HandleDirection } from "./nodes";
+
+// 从 sourceHandle 和 attributes 获取边显示标签
+// sourceHandle: "default" | "status:xxx"
+// success: undefined/true=成功（默认）, false=失败
+function getEdgeDisplayLabel(
+  handle: string | undefined,
+  success?: boolean
+): string {
+  const parts: string[] = [];
+  
+  // 状态条件（从 sourceHandle）
+  if (handle && handle.startsWith("status:")) {
+    const status = handle.replace("status:", "");
+    if (status) {
+      parts.push(`状态: ${status}`);
+    }
+  }
+  
+  // 只有失败时才特别标注（因为默认就是成功）
+  if (success === false) {
+    parts.push("(失败)");
+  }
+  
+  if (parts.length === 0) {
+    return "默认";
+  }
+  
+  return parts.join(" ");
+}
 
 // 判断位置是否为水平方向
 function isHorizontalPosition(position: string): boolean {
@@ -391,20 +420,8 @@ function MarkedEdge(props: EdgeProps) {
     let markClass = "";
     if (props.selected) {
       markClass = style["edge-selected"];
-    } else {
-      const isJumpBack = props.targetHandleId === TargetHandleTypeEnum.JumpBack;
-
-      switch (props.sourceHandleId) {
-        case SourceHandleTypeEnum.Next:
-          markClass = isJumpBack ? style["edge-jumpback"] : style["edge-next"];
-          break;
-        case SourceHandleTypeEnum.Error:
-          markClass = isJumpBack
-            ? style["edge-error-jumpback"]
-            : style["edge-error"];
-          break;
-      }
     }
+    // 不再根据条件设置边颜色，使用默认的流动样式
 
     // 如果 source 和 target 都已执行，则边也标记为已执行
     const isExecuted =
@@ -419,22 +436,13 @@ function MarkedEdge(props: EdgeProps) {
     );
   }, [
     props.selected,
-    props.sourceHandleId,
-    props.targetHandleId,
+    edge,
     props.source,
     props.target,
     debugMode,
     executedNodes,
   ]);
 
-  const labelClass = useMemo(
-    () =>
-      classNames({
-        [style.label]: true,
-        [style["label-selected"]]: props.selected,
-      }),
-    [props.selected]
-  );
   const labelStyle = useMemo(() => {
     const baseStyle: React.CSSProperties = {
       transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
@@ -472,6 +480,22 @@ function MarkedEdge(props: EdgeProps) {
     return baseStyle;
   }, [labelX, labelY, isDragging, hasOffset, isRelated, focusOpacity]);
 
+  const labelClass = useMemo(
+    () =>
+      classNames({
+        [style.label]: true,
+        [style["label-selected"]]: props.selected,
+      }),
+    [props.selected]
+  );
+
+  // 生成条件标签文字
+  const conditionLabel = useMemo(() => {
+    const handle = String(edge?.sourceHandle || "default");
+    const success = edge?.attributes?.success as boolean | undefined;
+    return getEdgeDisplayLabel(handle, success);
+  }, [edge?.sourceHandle, edge?.attributes?.success]);
+
   return (
     <g style={opacityStyle}>
       <BaseEdge className={edgeClass} id={props.id} path={edgePath} />
@@ -490,10 +514,10 @@ function MarkedEdge(props: EdgeProps) {
             title="拖拽调整路径，双击重置"
           />
         )}
-        {/* 标签 */}
-        {showEdgeLabel && props.label != null ? (
+        {/* 标签 - 显示条件信息 */}
+        {showEdgeLabel && conditionLabel ? (
           <div className={labelClass} style={labelStyle}>
-            {props.label}
+            {conditionLabel}
           </div>
         ) : null}
       </EdgeLabelRenderer>

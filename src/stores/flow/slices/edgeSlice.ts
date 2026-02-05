@@ -1,15 +1,11 @@
 import type { StateCreator } from "zustand";
 import {
   applyEdgeChanges,
-  addEdge as addEdgeRF,
   type EdgeChange,
   type Connection,
 } from "@xyflow/react";
 import type { FlowStore, FlowEdgeState, EdgeType } from "../types";
-import { SourceHandleTypeEnum } from "../../../components/flow/nodes";
 import {
-  findEdgeById,
-  calcuLinkOrder,
   getSelectedEdges,
 } from "../utils/edgeUtils";
 
@@ -26,26 +22,15 @@ export const createEdgeSlice: StateCreator<FlowStore, [], [], FlowEdgeState> = (
     set((state) => {
       let edges = [...state.edges];
 
-      // 更新前处理
-      changes.forEach((change) => {
-        if (change.type === "remove") {
-          const removedEdge = findEdgeById(edges, change.id);
-          if (removedEdge) {
-            edges.forEach((edge) => {
-              if (
-                edge.source === removedEdge.source &&
-                edge.sourceHandle === removedEdge.sourceHandle &&
-                edge.label > removedEdge.label
-              ) {
-                edge.label--;
-              }
-            });
-          }
-        }
-      });
+      // 完全忽略 "add" 类型的变更，边的添加由 addEdge 方法控制
+      const filteredChanges = changes.filter(change => change.type !== "add");
+
+      if (filteredChanges.length === 0) {
+        return {};
+      }
 
       // 应用变更
-      const updatedEdges = applyEdgeChanges(changes, edges);
+      const updatedEdges = applyEdgeChanges(filteredChanges, edges);
       const newEdges = updatedEdges as EdgeType[];
       const selectedEdges = getSelectedEdges(updatedEdges as EdgeType[]);
       get().updateSelection(state.selectedNodes, selectedEdges);
@@ -146,62 +131,46 @@ export const createEdgeSlice: StateCreator<FlowStore, [], [], FlowEdgeState> = (
     get().saveHistory(500);
   },
 
-  // 添加边
-  addEdge(co: Connection, options) {
-    const { isCheck = true } = options || {};
-
+  // 添加边 - 相同 source + target + sourceHandle 的边会被合并
+  addEdge(co: Connection, _options) {
     set((state) => {
-      // 检查冲突项
-      if (isCheck) {
-        const edges = state.edges;
-        let crash = null;
+      const edges = [...state.edges];
 
-        switch (co.sourceHandle) {
-          case SourceHandleTypeEnum.Next:
-            // next 和 on_error 不能同时指向同一个节点
-            crash = edges.find(
-              (edge) =>
-                edge.source === co.source &&
-                edge.target === co.target &&
-                edge.sourceHandle === SourceHandleTypeEnum.Error
-            );
-            break;
-          case SourceHandleTypeEnum.Error:
-            if (
-              co.source === co.target &&
-              co.sourceHandle === SourceHandleTypeEnum.Error
-            ) {
-              crash = true;
-              break;
-            }
-            // on_error 和 next 不能同时指向同一个节点
-            crash = edges.find(
-              (edge) =>
-                edge.source === co.source &&
-                edge.target === co.target &&
-                edge.sourceHandle === SourceHandleTypeEnum.Next
-            );
-            break;
-        }
+      // 从 sourceHandle 获取条件类型
+      // OneDragon 格式: "default" 或 "status:xxx"
+      const handleStr = String(co.sourceHandle || "default");
 
-        if (crash) return {};
-      }
-
-      // 计算链接次序
-      const order = calcuLinkOrder(
-        state.edges,
-        co.source,
-        co.sourceHandle as SourceHandleTypeEnum
+      // 查找是否已存在相同 source + target + sourceHandle 的边
+      const existingEdgeIndex = edges.findIndex(
+        (edge) => 
+          edge.source === co.source && 
+          edge.target === co.target &&
+          edge.sourceHandle === handleStr
       );
 
+      if (existingEdgeIndex >= 0) {
+        // 边已存在，不重复创建
+        return { edges };
+      }
+
+      // 边不存在，创建新边
       const newEdge = {
         type: "marked",
-        label: order,
-        ...co,
+        id: `edge_${co.source}_${co.target}_${handleStr}`,
+        source: co.source,
+        target: co.target,
+        sourceHandle: handleStr,
+        targetHandle: co.targetHandle,
+        attributes: {
+          // 如果是 status:xxx 格式，提取状态值
+          ...(handleStr.startsWith("status:") ? { status: handleStr.replace("status:", "") } : {}),
+          // 默认为成功（success: undefined 或 true 都表示成功）
+        },
       } as EdgeType;
 
-      const newEdges = addEdgeRF(newEdge, state.edges);
-      return { edges: newEdges };
+      // 直接添加到边数组
+      edges.push(newEdge);
+      return { edges };
     });
 
     // 保存历史记录

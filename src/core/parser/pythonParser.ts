@@ -9,7 +9,7 @@ import type {
   OperationNodeParams,
   NodeFromParams,
   NodeNotifyParams,
-} from "../../stores/flow/types-onedragon";
+} from "../../stores/flow/types";
 
 /**
  * 解析 @operation_node 装饰器参数
@@ -106,20 +106,20 @@ function parseNodeNotifyDecorator(line: string): NodeNotifyParams | null {
  */
 function extractDocstring(lines: string[], startIndex: number): { docstring: string; endIndex: number } | null {
   let i = startIndex;
-  
+
   // 跳过空行
   while (i < lines.length && lines[i].trim() === "") {
     i++;
   }
-  
+
   if (i >= lines.length) return null;
-  
+
   const line = lines[i].trim();
-  
+
   // 检查是否是文档字符串开始
   if (line.startsWith('"""') || line.startsWith("'''")) {
     const quote = line.startsWith('"""') ? '"""' : "'''";
-    
+
     // 单行文档字符串
     if (line.endsWith(quote) && line.length > 6) {
       return {
@@ -127,7 +127,7 @@ function extractDocstring(lines: string[], startIndex: number): { docstring: str
         endIndex: i,
       };
     }
-    
+
     // 多行文档字符串
     let docstring = line.slice(3);
     i++;
@@ -145,7 +145,7 @@ function extractDocstring(lines: string[], startIndex: number): { docstring: str
       i++;
     }
   }
-  
+
   return null;
 }
 
@@ -155,28 +155,28 @@ function extractDocstring(lines: string[], startIndex: number): { docstring: str
 function extractMethodBody(lines: string[], startIndex: number, baseIndent: number): { code: string; endIndex: number } {
   let code = "";
   let i = startIndex;
-  
+
   while (i < lines.length) {
     const line = lines[i];
-    
+
     // 空行或继续在方法内部
     if (line.trim() === "") {
       code += "\n";
       i++;
       continue;
     }
-    
+
     // 计算当前行的缩进
     const currentIndent = line.search(/\S/);
-    
+
     // 如果缩进小于等于基础缩进，说明方法结束了
     // 但要排除装饰器（以@开头）
     if (currentIndent <= baseIndent && !line.trim().startsWith("@") && !line.trim().startsWith("#")) {
       break;
     }
-    
+
     // 如果是下一个方法的装饰器，结束当前方法
-    if (line.trim().startsWith("@operation_node") || 
+    if (line.trim().startsWith("@operation_node") ||
         line.trim().startsWith("@node_from") ||
         line.trim().startsWith("@node_notify") ||
         line.trim().match(/^\s*def\s+/)) {
@@ -185,13 +185,13 @@ function extractMethodBody(lines: string[], startIndex: number, baseIndent: numb
         break;
       }
     }
-    
+
     // 移除基础缩进
     const relativeLine = line.slice(Math.min(baseIndent + 4, line.search(/\S/) >= 0 ? line.search(/\S/) : 0));
     code += relativeLine + "\n";
     i++;
   }
-  
+
   return { code: code.trimEnd(), endIndex: i - 1 };
 }
 
@@ -203,17 +203,17 @@ function parseMethod(lines: string[], startIndex: number): { node: ParsedOneDrag
   const nodeFromList: NodeFromParams[] = [];
   const nodeNotifyList: NodeNotifyParams[] = [];
   let operationNode: OperationNodeParams | null = null;
-  
+
   // 收集装饰器
   while (i < lines.length) {
     const line = lines[i].trim();
-    
+
     // 跳过空行和注释
     if (line === "" || line.startsWith("#")) {
       i++;
       continue;
     }
-    
+
     // 解析 @node_from
     if (line.startsWith("@node_from")) {
       const nodeFrom = parseNodeFromDecorator(line);
@@ -223,7 +223,7 @@ function parseMethod(lines: string[], startIndex: number): { node: ParsedOneDrag
       i++;
       continue;
     }
-    
+
     // 解析 @node_notify
     if (line.startsWith("@node_notify")) {
       const notify = parseNodeNotifyDecorator(line);
@@ -233,14 +233,14 @@ function parseMethod(lines: string[], startIndex: number): { node: ParsedOneDrag
       i++;
       continue;
     }
-    
+
     // 解析 @operation_node
     if (line.startsWith("@operation_node")) {
       operationNode = parseOperationNodeDecorator(line);
       i++;
       continue;
     }
-    
+
     // 遇到方法定义
     const defMatch = line.match(/def\s+(\w+)\s*\(/);
     if (defMatch) {
@@ -248,16 +248,16 @@ function parseMethod(lines: string[], startIndex: number): { node: ParsedOneDrag
         // 不是 operation_node 方法，跳过
         return { node: null, endIndex: i };
       }
-      
+
       const methodName = defMatch[1];
       const baseIndent = lines[i].search(/\S/);
       i++;
-      
+
       // 跳过方法签名的续行
       while (i < lines.length && !lines[i - 1].includes(":")) {
         i++;
       }
-      
+
       // 提取文档字符串
       let docstring = "";
       const docResult = extractDocstring(lines, i);
@@ -265,10 +265,10 @@ function parseMethod(lines: string[], startIndex: number): { node: ParsedOneDrag
         docstring = docResult.docstring;
         i = docResult.endIndex + 1;
       }
-      
+
       // 提取方法体
       const bodyResult = extractMethodBody(lines, i, baseIndent);
-      
+
       return {
         node: {
           methodName,
@@ -281,11 +281,11 @@ function parseMethod(lines: string[], startIndex: number): { node: ParsedOneDrag
         endIndex: bodyResult.endIndex,
       };
     }
-    
+
     // 其他行，跳出装饰器收集
     break;
   }
-  
+
   return { node: null, endIndex: i };
 }
 
@@ -294,23 +294,23 @@ function parseMethod(lines: string[], startIndex: number): { node: ParsedOneDrag
  */
 function parseClassVars(lines: string[], classStartIndex: number): Record<string, string> {
   const classVars: Record<string, string> = {};
-  
+
   for (let i = classStartIndex; i < lines.length; i++) {
     const line = lines[i].trim();
-    
+
     // 跳过空行和注释
     if (line === "" || line.startsWith("#")) continue;
-    
+
     // 检测到方法定义，停止
     if (line.startsWith("def ") || line.startsWith("@")) break;
-    
+
     // 匹配 STATUS_XXX: ClassVar[str] = 'xxx' 格式
     const classVarMatch = line.match(/^(\w+)\s*:\s*ClassVar\[.*?\]\s*=\s*['"](.+)['"]/);
     if (classVarMatch) {
       classVars[classVarMatch[1]] = classVarMatch[2];
     }
   }
-  
+
   return classVars;
 }
 
@@ -320,7 +320,7 @@ function parseClassVars(lines: string[], classStartIndex: number): Record<string
 function parseImports(content: string): string[] {
   const imports: string[] = [];
   const lines = content.split("\n");
-  
+
   for (const line of lines) {
     const trimmed = line.trim();
     if (trimmed.startsWith("import ") || trimmed.startsWith("from ")) {
@@ -329,7 +329,7 @@ function parseImports(content: string): string[] {
     // 类定义开始后停止
     if (trimmed.startsWith("class ")) break;
   }
-  
+
   return imports;
 }
 
@@ -339,27 +339,27 @@ function parseImports(content: string): string[] {
 function parseInitMethod(lines: string[], startIndex: number): { code: string; endIndex: number } | null {
   for (let i = startIndex; i < lines.length; i++) {
     const line = lines[i].trim();
-    
+
     if (line.startsWith("def __init__")) {
       const baseIndent = lines[i].search(/\S/);
       let j = i + 1;
-      
+
       // 跳过方法签名
       while (j < lines.length && !lines[j - 1].includes(":")) {
         j++;
       }
-      
+
       // 提取方法体
       const bodyResult = extractMethodBody(lines, j, baseIndent);
       return { code: bodyResult.code, endIndex: bodyResult.endIndex };
     }
-    
+
     // 遇到 @operation_node 说明 __init__ 不存在或已经过去
     if (line.startsWith("@operation_node")) {
       return null;
     }
   }
-  
+
   return null;
 }
 
@@ -368,15 +368,15 @@ function parseInitMethod(lines: string[], startIndex: number): { code: string; e
  */
 export function parsePythonFile(content: string): ParsedOneDragonClass {
   const lines = content.split("\n");
-  
+
   // 解析导入
   const imports = parseImports(content);
-  
+
   // 查找类定义
   let className = "";
   let baseClass = "";
   let classStartIndex = -1;
-  
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     const classMatch = line.match(/^class\s+(\w+)\s*(?:\(([^)]+)\))?\s*:/);
@@ -387,7 +387,7 @@ export function parsePythonFile(content: string): ParsedOneDragonClass {
       break;
     }
   }
-  
+
   // 如果没有找到类定义，返回空结果
   if (!className || classStartIndex === -1) {
     return {
@@ -398,20 +398,20 @@ export function parsePythonFile(content: string): ParsedOneDragonClass {
       nodes: [],
     };
   }
-  
+
   // 解析类变量
   const classVars = parseClassVars(lines, classStartIndex);
-  
+
   // 解析 __init__ 方法
   const initResult = parseInitMethod(lines, classStartIndex);
-  
+
   // 解析所有 operation_node 方法
   const nodes: ParsedOneDragonNode[] = [];
   let i = classStartIndex;
-  
+
   while (i < lines.length) {
     const line = lines[i].trim();
-    
+
     // 查找装饰器开始
     if (line.startsWith("@node_from") || line.startsWith("@node_notify") || line.startsWith("@operation_node")) {
       const result = parseMethod(lines, i);
@@ -421,10 +421,10 @@ export function parsePythonFile(content: string): ParsedOneDragonClass {
       i = result.endIndex + 1;
       continue;
     }
-    
+
     i++;
   }
-  
+
   return {
     className,
     baseClass,
@@ -450,16 +450,15 @@ export function convertToFlowData(parsed: ParsedOneDragonClass): {
   };
 } {
   const flowNodes: any[] = [];
-  const flowEdges: any[] = [];
-  
+
   // 创建节点名到ID的映射
   const nameToId: Record<string, string> = {};
-  
+
   // 第一遍：创建所有节点
   parsed.nodes.forEach((node, index) => {
     const nodeId = `node_${index + 1}`;
     nameToId[node.operationNode.name] = nodeId;
-    
+
     flowNodes.push({
       id: nodeId,
       type: "pipeline",
@@ -476,46 +475,19 @@ export function convertToFlowData(parsed: ParsedOneDragonClass): {
       },
     });
   });
-  
+
   // 第二遍：创建边（基于 node_from）
-  let edgeIndex = 0;
+  // sourceHandle 只基于 status，success/fail 存储在 attributes 中
+  const edgeMap = new Map<string, any>(); // key: `${sourceId}_${targetId}_${sourceHandle}_${success}`
+
   parsed.nodes.forEach((node) => {
     const targetId = nameToId[node.operationNode.name];
-    
+
     for (const nodeFrom of node.nodeFromList) {
-      const sourceId = nameToId[nodeFrom.from_name];
-      
-      if (sourceId && targetId) {
-        // 确定边的条件类型
-        let sourceHandle = "default";
-        let attributes: any = {};
-        
-        if (nodeFrom.status !== undefined) {
-          sourceHandle = "status";
-          attributes.condition = "status";
-          attributes.status = nodeFrom.status;
-        } else if (nodeFrom.success === true) {
-          sourceHandle = "success";
-          attributes.condition = "success";
-        } else if (nodeFrom.success === false) {
-          sourceHandle = "fail";
-          attributes.condition = "fail";
-        } else {
-          attributes.condition = "default";
-        }
-        
-        flowEdges.push({
-          id: `edge_${++edgeIndex}`,
-          source: sourceId,
-          sourceHandle,
-          target: targetId,
-          targetHandle: "target",
-          type: "marked",
-          label: nodeFrom.status || "",
-          attributes,
-        });
-      } else if (!sourceId) {
-        // 源节点不存在，创建外部节点
+      let sourceId = nameToId[nodeFrom.from_name];
+
+      // 如果源节点不存在，创建外部节点
+      if (!sourceId) {
         const externalId = `external_${nodeFrom.from_name}`;
         if (!nameToId[nodeFrom.from_name]) {
           nameToId[nodeFrom.from_name] = externalId;
@@ -528,38 +500,43 @@ export function convertToFlowData(parsed: ParsedOneDragonClass): {
             },
           });
         }
-        
-        let sourceHandle = "default";
-        let attributes: any = {};
-        
-        if (nodeFrom.status !== undefined) {
-          sourceHandle = "status";
-          attributes.condition = "status";
-          attributes.status = nodeFrom.status;
-        } else if (nodeFrom.success === true) {
-          sourceHandle = "success";
-          attributes.condition = "success";
-        } else if (nodeFrom.success === false) {
-          sourceHandle = "fail";
-          attributes.condition = "fail";
-        } else {
-          attributes.condition = "default";
+        sourceId = nameToId[nodeFrom.from_name];
+      }
+
+      if (sourceId && targetId) {
+        // sourceHandle 只基于 status（决定出口）
+        const hasStatus = nodeFrom.status !== undefined && nodeFrom.status !== "";
+        const sourceHandle = hasStatus ? `status:${nodeFrom.status}` : "default";
+
+        // success/fail 存储在 attributes 中
+        const successVal = nodeFrom.success;
+        const successKey = successVal === true ? "_success" : (successVal === false ? "_fail" : "");
+
+        // edgeKey 需要包含 success 状态来区分同一出口的多条边
+        const edgeKey = `${sourceId}_${targetId}_${sourceHandle}${successKey}`;
+
+        if (!edgeMap.has(edgeKey)) {
+          // 创建新边
+          edgeMap.set(edgeKey, {
+            id: `edge_${edgeKey}`,
+            source: sourceId,
+            sourceHandle: sourceHandle,
+            target: targetId,
+            targetHandle: "target",
+            type: "marked",
+            attributes: {
+              success: nodeFrom.success,
+              status: nodeFrom.status,
+            },
+          });
         }
-        
-        flowEdges.push({
-          id: `edge_${++edgeIndex}`,
-          source: nameToId[nodeFrom.from_name],
-          sourceHandle,
-          target: targetId,
-          targetHandle: "target",
-          type: "marked",
-          label: nodeFrom.status || "",
-          attributes,
-        });
       }
     }
   });
-  
+
+  // 转换 map 为数组
+  const flowEdges = Array.from(edgeMap.values());
+
   return {
     nodes: flowNodes,
     edges: flowEdges,

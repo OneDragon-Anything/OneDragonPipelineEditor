@@ -8,7 +8,6 @@ import type {
 } from "../types";
 import {
   NodeTypeEnum,
-  SourceHandleTypeEnum,
   TargetHandleTypeEnum,
 } from "../../../components/flow/nodes";
 import {
@@ -181,7 +180,7 @@ export const createNodeSlice: StateCreator<FlowStore, [], [], FlowNodeState> = (
             return;
           get().addEdge({
             source: node.id,
-            sourceHandle: SourceHandleTypeEnum.Next,
+            sourceHandle: "default",  // OneDragon 风格默认出口
             target: id,
             targetHandle: TargetHandleTypeEnum.Target,
           });
