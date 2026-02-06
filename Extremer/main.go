@@ -45,7 +45,7 @@ func main() {
 	app.splash = sp
 
 	err = wails.Run(&options.App{
-		Title:            "MaaPipelineEditor",
+		Title:            "OneDragon Pipeline Editor",
 		Width:            1280,
 		Height:           800,
 		MinWidth:         1024,
@@ -71,8 +71,8 @@ func main() {
 		Mac: &mac.Options{
 			TitleBar: mac.TitleBarDefault(),
 			About: &mac.AboutInfo{
-				Title:   "MaaPipelineEditor",
-				Message: "MAA Pipeline 可视化编辑器\n\nCopyright 2024 MaaXYZ",
+				Title:   "OneDragon Pipeline Editor",
+				Message: "OneDragon 工作流可视化编辑器\n\nCopyright 2024 OneDragon-Anything.",
 				Icon:    icon,
 			},
 		},

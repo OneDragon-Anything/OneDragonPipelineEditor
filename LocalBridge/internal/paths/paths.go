@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	AppName = "MaaPipelineEditor"
+	AppName = "OneDragonPipelineEditor"
 	SubName = "LocalBridge"
 )
 

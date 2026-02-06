@@ -18,7 +18,6 @@ import {
   LoadingOutlined,
   MobileOutlined,
   DesktopOutlined,
-  ShareAltOutlined,
 } from "@ant-design/icons";
 import IconFont from "./iconfonts";
 import UpdateLog from "./modals/UpdateLog";
@@ -30,25 +29,13 @@ import { globalConfig } from "../stores/configStore";
 import { useTheme } from "../contexts/ThemeContext";
 import classNames from "classnames";
 import { useState, useEffect } from "react";
-import { generateShareLink } from "../utils/shareHelper";
 
 const versionLinks = [
   {
     key: "stable",
-    href: "https://mpe.codax.site/stable",
+    href: "",
     text: "稳定版",
-  },
-  {
-    key: "preview",
-    href: "https://kqcoxn.github.io/MaaPipelineEditor/",
-    text: "预览版",
-  },
-  {
-    key: "mfw_5_0",
-    href: "https://mpe.codax.site/mfw_5_0/",
-    text: "MFW 5.0 快照",
-  },
-  { key: "yamaape", href: "https://yamaape.codax.site", text: "YAMaaPE" },
+  }
 ];
 
 const otherVersions: MenuProps["items"] = versionLinks.map(
@@ -296,10 +283,10 @@ function Header() {
           />
           <div className={style.title}>
             <span className={classNames(style.title, style["full-title"])}>
-              MaaPipelineExtremer - Editor
+              OneDragonPipelineExtremer - Editor
             </span>
             <span className={classNames(style.title, style["medium-title"])}>
-              MaaPipelineEditor
+              OneDragonPipelineEditor
             </span>
             <span className={classNames(style.title, style["short-title"])}>
               MPE
@@ -315,9 +302,6 @@ function Header() {
                 Stable Version
               </Tag>
             )}
-            <Tag variant="filled" color="purple">
-              MFW v{globalConfig.mfwVersion}
-            </Tag>
           </div>
         </div>
         <div className={style.right}>
@@ -368,7 +352,7 @@ function Header() {
             </Tooltip>
           </div>
           <div className={style.links}>
-            <Tooltip placement="bottom" title="文档站">
+            {/* <Tooltip placement="bottom" title="文档站">
               <IconFont
                 className="icon-interactive"
                 name="icon-icon_wendangziliaopeizhi"
@@ -377,19 +361,7 @@ function Header() {
                   window.open("https://mpe.codax.site/docs");
                 }}
               />
-            </Tooltip>
-            <Tooltip placement="bottom" title="Pipeline协议">
-              <img
-                className="icon-interactive"
-                style={{ width: 29, marginLeft: 7, marginRight: 2 }}
-                src={`${import.meta.env.BASE_URL}maafw.png`}
-                onClick={() => {
-                  window.open(
-                    "https://maafw.xyz/docs/3.1-PipelineProtocol.html?source=mpe"
-                  );
-                }}
-              />
-            </Tooltip>
+            </Tooltip> */}
             <Tooltip placement="bottom" title="更新日志">
               <IconFont
                 className="icon-interactive"
@@ -404,7 +376,7 @@ function Header() {
                 name="icon-githublogo"
                 size={32}
                 onClick={() => {
-                  window.open("https://github.com/kqcoxn/MaaPipelineEditor");
+                  window.open("https://github.com/OneDragon-Anything/OneDragonPipelineEditor");
                 }}
               />
             </Tooltip>

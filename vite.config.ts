@@ -5,7 +5,7 @@ import path from "path";
 export default defineConfig(({ mode }) => {
   let base = "/stable/";
   if (mode === "preview") {
-    base = "/MaaPipelineEditor/";
+    base = "/editor/";
   } else if (mode === "extremer") {
     base = "./";
   } else if (mode !== "stable") {
