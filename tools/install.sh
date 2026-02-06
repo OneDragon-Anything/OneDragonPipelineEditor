@@ -1,14 +1,14 @@
 #!/bin/bash
-# MPE Local Bridge 安装脚本 (Linux/macOS)
-# 使用方式: curl -fsSL https://raw.githubusercontent.com/kqcoxn/MaaPipelineEditor/main/tools/install.sh | bash
+# OneDragon Local Bridge 安装脚本 (Linux/macOS)
+# 使用方式: curl -fsSL https://raw.githubusercontent.com/OneDragon-Anything/OneDragonPipelineEditor/main/tools/install.sh | bash
 
 set -e
 
-REPO="kqcoxn/MaaPipelineEditor"
+REPO="OneDragon-Anything/OneDragonPipelineEditor"
 INSTALL_DIR="$HOME/.local/bin"
-BIN_NAME="mpelb"
+BIN_NAME="odlb"
 
-echo "🚀 正在安装 MPE Local Bridge..."
+echo "🚀 正在安装 OneDragon Local Bridge..."
 
 # 检测操作系统和架构
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -53,7 +53,7 @@ fi
 echo "✅ 最新版本: $VERSION"
 
 # 构建下载 URL
-BINARY_NAME="mpelb-${OS}-${ARCH}"
+BINARY_NAME="odlb-${OS}-${ARCH}"
 DOWNLOAD_URL="https://github.com/$REPO/releases/download/$VERSION/$BINARY_NAME"
 
 # 创建安装目录
@@ -85,7 +85,7 @@ echo ""
 echo "🎉 安装完成！"
 echo ""
 echo "运行以下命令开始使用:"
-echo "  mpelb --help"
+echo "  odlb --help"
 echo ""
 echo "快速启动服务:"
-echo "  mpelb --root ./你的项目目录"
+echo "  odlb --root ./你的项目目录"

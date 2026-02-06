@@ -1,7 +1,7 @@
 {
     "scripts": {
-        "build": "go mod tidy && go build -o ./build/mpelb.exe ./cmd/lb",
-        "run": "./build/mpelb.exe --root ./test-json",
-        "server": "go mod tidy && go build -o ./build/mpelb.exe ./cmd/lb && ./build/mpelb.exe --root ./test-json/base --log-level DEBUG"
+        "build": "go mod tidy && go build -o ./build/odlb.exe ./cmd/lb",
+        "run": "./build/odlb.exe --root ./test-json",
+        "server": "go mod tidy && go build -o ./build/odlb.exe ./cmd/lb && ./build/odlb.exe --root ./test-json/base --log-level DEBUG"
     }
 }

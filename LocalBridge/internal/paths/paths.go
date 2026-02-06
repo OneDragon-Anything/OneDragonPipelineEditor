@@ -92,17 +92,17 @@ func getUserDataDir() string {
 
 	switch runtime.GOOS {
 	case "windows":
-		// Windows: %APPDATA%\MaaPipelineEditor\LocalBridge
+		// Windows: %APPDATA%\OneDragonPipelineEditor\LocalBridge
 		baseDir = os.Getenv("APPDATA")
 		if baseDir == "" {
 			baseDir = filepath.Join(os.Getenv("USERPROFILE"), "AppData", "Roaming")
 		}
 	case "darwin":
-		// macOS: ~/Library/Application Support/MaaPipelineEditor/LocalBridge
+		// macOS: ~/Library/Application Support/OneDragonPipelineEditor/LocalBridge
 		homeDir, _ := os.UserHomeDir()
 		baseDir = filepath.Join(homeDir, "Library", "Application Support")
 	default:
-		// Linux: ~/.config/MaaPipelineEditor/LocalBridge 或 $XDG_CONFIG_HOME
+		// Linux: ~/.config/OneDragonPipelineEditor/LocalBridge 或 $XDG_CONFIG_HOME
 		baseDir = os.Getenv("XDG_CONFIG_HOME")
 		if baseDir == "" {
 			homeDir, _ := os.UserHomeDir()

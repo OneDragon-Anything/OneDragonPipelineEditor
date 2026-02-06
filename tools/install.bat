@@ -1,16 +1,16 @@
 @echo off
-REM MPE Local Bridge Installer for Windows CMD
-REM Usage: curl -fsSL https://raw.githubusercontent.com/kqcoxn/MaaPipelineEditor/main/tools/install.bat -o %TEMP%\install-mpelb.bat && %TEMP%\install-mpelb.bat
+REM OneDragon Local Bridge Installer for Windows CMD
+REM Usage: curl -fsSL https://raw.githubusercontent.com/OneDragon-Anything/OneDragonPipelineEditor/main/tools/install.bat -o %TEMP%\install-odlb.bat && %TEMP%\install-odlb.bat
 
 setlocal enabledelayedexpansion
 
-set "REPO=kqcoxn/MaaPipelineEditor"
-set "INSTALL_DIR=%LOCALAPPDATA%\mpelb"
-set "BIN_PATH=%INSTALL_DIR%\mpelb.exe"
+set "REPO=OneDragon-Anything/OneDragonPipelineEditor"
+set "INSTALL_DIR=%LOCALAPPDATA%\odlb"
+set "BIN_PATH=%INSTALL_DIR%\odlb.exe"
 set "API_URL=https://api.github.com/repos/%REPO%/releases/latest"
 
 echo.
-echo Installing MPE Local Bridge...
+echo Installing OneDragon Local Bridge...
 echo.
 
 REM Create installation directory
@@ -67,10 +67,10 @@ if "!VERSION!"=="" (
 echo Latest version: !VERSION!
 
 REM Build download URL
-set "DOWNLOAD_URL=https://github.com/%REPO%/releases/download/!VERSION!/mpelb-windows-amd64.exe"
+set "DOWNLOAD_URL=https://github.com/%REPO%/releases/download/!VERSION!/odlb-windows-amd64.exe"
 
 REM Download binary
-echo Downloading: mpelb-windows-amd64.exe
+echo Downloading: odlb-windows-amd64.exe
 curl -fsSL "%DOWNLOAD_URL%" -o "%BIN_PATH%"
 
 if errorlevel 1 (
@@ -101,10 +101,10 @@ echo.
 echo Installation complete!
 echo.
 echo Usage:
-echo   mpelb --help
+echo   odlb --help
 echo.
 echo Quick start:
-echo   mpelb --root .\your-project-directory
+echo   odlb --root .\your-project-directory
 echo.
 
 if "!PATH_ADDED!"=="1" (

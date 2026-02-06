@@ -1,13 +1,13 @@
-# MPE Local Bridge 安装脚本 (Windows)
-# 使用方式: irm https://raw.githubusercontent.com/kqcoxn/MaaPipelineEditor/main/tools/install.ps1 | iex
+# OneDragon Local Bridge 安装脚本 (Windows)
+# 使用方式: irm https://raw.githubusercontent.com/OneDragon-Anything/OneDragonPipelineEditor/main/tools/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
 
-$REPO = "kqcoxn/MaaPipelineEditor"
-$INSTALL_DIR = "$env:LOCALAPPDATA\mpelb"
-$BIN_PATH = "$INSTALL_DIR\mpelb.exe"
+$REPO = "OneDragon-Anything/OneDragonPipelineEditor"
+$INSTALL_DIR = "$env:LOCALAPPDATA\odlb"
+$BIN_PATH = "$INSTALL_DIR\odlb.exe"
 
-Write-Host "🚀 正在安装 MPE Local Bridge..." -ForegroundColor Cyan
+Write-Host "🚀 正在安装 OneDragon Local Bridge..." -ForegroundColor Cyan
 
 # 创建安装目录
 if (!(Test-Path $INSTALL_DIR)) {
@@ -64,10 +64,10 @@ Write-Host ""
 Write-Host "🎉 安装完成！" -ForegroundColor Green
 Write-Host ""
 Write-Host "运行以下命令开始使用:" -ForegroundColor Cyan
-Write-Host "  mpelb --help" -ForegroundColor White
+Write-Host "  odlb --help" -ForegroundColor White
 Write-Host ""
 Write-Host "快速启动服务:" -ForegroundColor Cyan
-Write-Host "  mpelb --root .\你的项目目录" -ForegroundColor White
+Write-Host "  odlb --root .\u4f60的项目目录" -ForegroundColor White
 Write-Host ""
 Write-Host "注意: 如果命令未找到，请重启终端或运行:" -ForegroundColor Yellow
 Write-Host "  `$env:Path += `";$INSTALL_DIR`"" -ForegroundColor White

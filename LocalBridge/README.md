@@ -1,6 +1,6 @@
 # Local Bridge CLI
 
-Local Bridge (lb) 是连接本地文件系统与 MaaPipelineEditor 前端的桥梁服务，基于 Go 语言开发，提供 WebSocket 通信和文件管理功能。
+Local Bridge (lb) 是连接本地文件系统与 OneDragonPipelineEditor 前端的桥梁服务，基于 Go 语言开发，提供 WebSocket 通信和文件管理功能。
 
 ## 功能特性
 
@@ -8,10 +8,10 @@ Local Bridge (lb) 是连接本地文件系统与 MaaPipelineEditor 前端的桥�
 
 - **本地文件协议**
 
-  - 文件扫描：递归扫描根目录下的 `.json` 和 `.jsonc` 文件
-  - 文件读取：读取并解析 JSON/JSONC 文件内容
-  - 文件保存：保存编辑后的 pipeline 文件到本地
-  - 文件创建：在指定目录创建新的 pipeline 文件
+  - 文件扫描：递归扫描根目录下的 `.py` 文件
+  - 文件读取：读取并解析 Python 文件内容
+  - 文件保存：保存编辑后的 Python 文件到本地
+  - 文件创建：在指定目录创建新的 Python 文件
   - 文件监听：实时监听文件变化（新增、修改、删除）
   - 防抖处理：避免频繁的文件变化通知
 
@@ -32,9 +32,6 @@ Local Bridge (lb) 是连接本地文件系统与 MaaPipelineEditor 前端的桥�
 
 ### 预留功能（未实现）
 
-- MaaFramework 协议
-- MaaMpeGoDebugger 协议
-- Debug 状态协议
 - AI 流协议
 
 ## 快速开始
@@ -43,7 +40,7 @@ Local Bridge (lb) 是连接本地文件系统与 MaaPipelineEditor 前端的桥�
 
 ```bash
 cd LocalBridge
-go build -o mpelb.exe ./cmd/lb
+go build -o odlb.exe ./cmd/lb
 ```
 
 ### 运行
@@ -51,25 +48,25 @@ go build -o mpelb.exe ./cmd/lb
 使用默认配置运行（根目录为当前目录，端口 9066）：
 
 ```bash
-mpelb
+odlb
 ```
 
 指定根目录和端口：
 
 ```bash
-mpelb --root ./pipelines --port 9066
+odlb --root ./pipelines --port 9066
 ```
 
 使用配置文件：
 
 ```bash
-mpelb --config ./config/default.json
+odlb --config ./config/default.json
 ```
 
 完整参数示例：
 
 ```bash
-mpelb --root D:/pipelines --port 9066 --log-level DEBUG --log-dir ./logs
+odlb --root D:/pipelines --port 9066 --log-level DEBUG --log-dir ./logs
 ```
 
 ### 配置文件
@@ -85,16 +82,12 @@ mpelb --root D:/pipelines --port 9066 --log-level DEBUG --log-dir ./logs
   "file": {
     "root": "./",
     "exclude": ["node_modules", ".git", "dist", "build"],
-    "extensions": [".json", ".jsonc"]
+    "extensions": [".py"]
   },
   "log": {
     "level": "INFO",
     "dir": "./logs",
     "push_to_client": false
-  },
-  "maafw": {
-    "enabled": false,
-    "lib_dir": ""
   }
 }
 ```
@@ -142,7 +135,7 @@ mpelb --root D:/pipelines --port 9066 --log-level DEBUG --log-dir ./logs
 
 #### 1. 文件列表推送 `/lte/file_list`
 
-**方向**: lb → mpe  
+**方向**: lb → editor  
 **触发**: 连接建立时自动推送
 
 ```json
@@ -152,9 +145,9 @@ mpelb --root D:/pipelines --port 9066 --log-level DEBUG --log-dir ./logs
     "root": "/absolute/path/to/root",
     "files": [
       {
-        "file_path": "/absolute/path/to/file.json",
-        "file_name": "file.json",
-        "relative_path": "pipeline/file.json"
+        "file_path": "/absolute/path/to/task_app.py",
+        "file_name": "task_app.py",
+        "relative_path": "pipeline/task_app.py"
       }
     ]
   }
@@ -163,13 +156,13 @@ mpelb --root D:/pipelines --port 9066 --log-level DEBUG --log-dir ./logs
 
 #### 2. 打开文件 `/etl/open_file`
 
-**方向**: mpe → lb
+**方向**: editor → lb
 
 ```json
 {
   "path": "/etl/open_file",
   "data": {
-    "file_path": "/absolute/path/to/file.json"
+    "file_path": "/absolute/path/to/task_app.py"
   }
 }
 ```
@@ -180,7 +173,7 @@ mpelb --root D:/pipelines --port 9066 --log-level DEBUG --log-dir ./logs
 {
   "path": "/lte/file_content",
   "data": {
-    "file_path": "/absolute/path/to/file.json",
+    "file_path": "/absolute/path/to/task_app.py",
     "content": {
       /* pipeline JSON */
     }
@@ -190,13 +183,13 @@ mpelb --root D:/pipelines --port 9066 --log-level DEBUG --log-dir ./logs
 
 #### 3. 保存文件 `/etl/save_file`
 
-**方向**: mpe → lb
+**方向**: editor → lb
 
 ```json
 {
   "path": "/etl/save_file",
   "data": {
-    "file_path": "/absolute/path/to/file.json",
+    "file_path": "/absolute/path/to/task_app.py",
     "content": {
       /* pipeline JSON */
     }
@@ -210,7 +203,7 @@ mpelb --root D:/pipelines --port 9066 --log-level DEBUG --log-dir ./logs
 {
   "path": "/ack/save_file",
   "data": {
-    "file_path": "/absolute/path/to/file.json",
+    "file_path": "/absolute/path/to/task_app.py",
     "status": "ok"
   }
 }
@@ -218,13 +211,13 @@ mpelb --root D:/pipelines --port 9066 --log-level DEBUG --log-dir ./logs
 
 #### 4. 创建文件 `/etl/create_file`
 
-**方向**: mpe → lb
+**方向**: editor → lb
 
 ```json
 {
   "path": "/etl/create_file",
   "data": {
-    "file_name": "new_pipeline.json",
+    "file_name": "new_task_app.py",
     "directory": "/absolute/path/to/dir",
     "content": {
       /* 可选的初始内容 */
@@ -237,7 +230,7 @@ mpelb --root D:/pipelines --port 9066 --log-level DEBUG --log-dir ./logs
 
 #### 5. 文件变化通知 `/lte/file_changed`
 
-**方向**: lb → mpe  
+**方向**: lb → editor  
 **触发**: 文件被外部修改时自动推送
 
 ```json
@@ -245,7 +238,7 @@ mpelb --root D:/pipelines --port 9066 --log-level DEBUG --log-dir ./logs
   "path": "/lte/file_changed",
   "data": {
     "type": "created" | "modified" | "deleted",
-    "file_path": "/absolute/path/to/file.json"
+    "file_path": "/absolute/path/to/task_app.py"
   }
 }
 ```
@@ -336,7 +329,7 @@ LocalBridge/
 ```
 [14:32:15][INFO][WebSocket] 客户端已连接: 127.0.0.1:52341
 [14:32:16][INFO][File] 扫描到 12 个 pipeline 文件
-[14:32:20][WARN][File] 文件已被外部修改: task.json
+[14:32:20][WARN][File] 文件已被外部修改: task_app.py
 ```
 
 ## 开发指南
@@ -376,9 +369,8 @@ eventBus.Subscribe("event.type", func(event eventbus.Event) {
 
 ## 许可证
 
-本项目遵循与 MaaPipelineEditor 相同的许可证。
+本项目遵循与 OneDragonPipelineEditor 相同的许可证。
 
 ## 参考资料
 
 - [Local Bridge 协议规范](./Agreement.md)
-- [MaaFramework Go Binding](https://github.com/MaaXYZ/maa-framework-go)
