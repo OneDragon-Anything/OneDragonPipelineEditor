@@ -93,7 +93,7 @@ export class FileProtocol extends BaseProtocol {
    */
   private async handleFileContent(data: any): Promise<void> {
     try {
-      const { file_path, content, mpe_config, config_path } = data;
+      const { file_path, content } = data;
 
       if (!file_path || !content) {
         console.error("[FileProtocol] Invalid file content data:", data);
@@ -105,17 +105,11 @@ export class FileProtocol extends BaseProtocol {
       const success = await fileStore.openFileFromLocal(
         file_path,
         content,
-        mpe_config,
-        config_path
       );
 
       if (success) {
         const fileName = file_path.split(/[\/\\]/).pop();
-        if (mpe_config) {
-          message.success(`已打开文件: ${fileName} (含配置)`);
-        } else {
-          message.success(`已打开文件: ${fileName}`);
-        }
+        message.success(`已打开文件: ${fileName}`);
       } else {
         message.error("文件打开失败");
       }
@@ -281,24 +275,9 @@ export class FileProtocol extends BaseProtocol {
 
         // 更新当前文件的路径配置
         const fileStore = useFileStore.getState();
-        const configStore = useConfigStore.getState();
 
         // 更新文件路径
         fileStore.setFileConfig("filePath", file_path);
-
-        // 如果是分离模式，更新配置文件路径
-        if (configStore.configs.configHandlingMode === "separated") {
-          // 生成配置文件路径
-          const lastSep = Math.max(
-            file_path.lastIndexOf("/"),
-            file_path.lastIndexOf("\\")
-          );
-          const directory = file_path.substring(0, lastSep + 1);
-          const fileName = file_path.substring(lastSep + 1);
-          const baseName = fileName.replace(/\.(json|jsonc)$/i, "");
-          const configPath = `${directory}.${baseName}.mpe.json`;
-          fileStore.setFileConfig("separatedConfigPath", configPath);
-        }
 
         // 更新同步时间
         fileStore.setFileConfig("lastSyncTime", Date.now());

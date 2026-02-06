@@ -3,8 +3,9 @@ import { Modal, Form, Input, Select, message, Tooltip } from "antd";
 import { FolderOutlined, FileOutlined, HomeFilled } from "@ant-design/icons";
 import { useLocalFileStore } from "../../stores/localFileStore";
 import { useFileStore } from "../../stores/fileStore";
+import { useFlowStore } from "../../stores/flow";
 import { localServer, fileProtocol } from "../../services/server";
-import { flowToPipeline } from "../../core/parser";
+import { exportToPython } from "../../core/parser";
 
 interface CreateFileModalProps {
   visible: boolean;
@@ -27,7 +28,10 @@ export const CreateFileModal: React.FC<CreateFileModalProps> = ({
   const currentFilePath = useFileStore(
     (state) => state.currentFile.config.filePath
   );
-  const setFileConfig = useFileStore((state) => state.setFileConfig);
+  const { nodes, edges } = useFlowStore((state) => ({
+    nodes: state.nodes,
+    edges: state.edges,
+  }));
 
   // 提取目录列表
   const directoryOptions = useMemo(() => {
@@ -137,12 +141,12 @@ export const CreateFileModal: React.FC<CreateFileModalProps> = ({
     const trimmed = fileName.trim();
 
     // 已有后缀
-    if (trimmed.endsWith(".json") || trimmed.endsWith(".jsonc")) {
+    if (trimmed.endsWith(".py")) {
       return trimmed;
     }
 
     // 自动补全
-    return `${trimmed}.json`;
+    return `${trimmed}.py`;
   };
 
   // 验证文件名
@@ -157,8 +161,8 @@ export const CreateFileModal: React.FC<CreateFileModalProps> = ({
       return false;
     }
 
-    // 必须以.json或.jsonc结尾
-    return normalized.endsWith(".json") || normalized.endsWith(".jsonc");
+    // 必须以.py结尾
+    return normalized.endsWith(".py");
   };
 
   // 检查文件名是否在本地文件列表中已存在
@@ -236,8 +240,12 @@ export const CreateFileModal: React.FC<CreateFileModalProps> = ({
       // 规范化文件名
       const normalizedFileName = normalizeFileName(fileName);
 
-      // 获取当前编辑器的内容
-      const content = flowToPipeline();
+      // 过滤 Pipeline 节点（导出用）
+      const pipelineNodes = nodes.filter((n) => n.type === "pipeline");
+
+      // 使用 Python 导出格式
+      const { getExportMetadata } = await import("../../stores/fileStore");
+      const content = exportToPython(pipelineNodes as any, edges, getExportMetadata());
 
       // 通过协议请求创建文件
       const success = fileProtocol.requestCreateFile(
@@ -358,7 +366,7 @@ export const CreateFileModal: React.FC<CreateFileModalProps> = ({
             optionFilterProp="label"
             onChange={handleDirectoryChange}
             options={directoryOptions.map((dir) => {
-              const { display, isRoot } = getDisplayPath(dir);
+              const { display } = getDisplayPath(dir);
               return {
                 label: display,
                 value: dir,

@@ -15,27 +15,16 @@ import { useMFWStore } from "../../../../stores/mfwStore";
 import {
   copyNodeName,
   saveNodeAsTemplate,
-  copyNodeRecoJSON,
 } from "../../../flow/nodes/utils/nodeOperations";
 import { crossFileService } from "../../../../services/crossFileService";
 
 // 左侧工具栏
 export const FieldPanelToolbarLeft = memo(
   ({ currentNode }: { currentNode: NodeType | null }) => {
-    const showCopyRecoButton =
-      currentNode && currentNode.type === NodeTypeEnum.Pipeline;
-
     const handleCopyNodeName = () => {
       const pureNodeName = currentNode?.data.label || "";
       const nodeType = currentNode?.type;
       copyNodeName(pureNodeName, nodeType);
-    };
-
-    const handleCopyRecoJSON = () => {
-      if (!currentNode || currentNode.type !== NodeTypeEnum.Pipeline) {
-        return;
-      }
-      copyNodeRecoJSON(currentNode.id);
     };
 
     return (
@@ -48,16 +37,6 @@ export const FieldPanelToolbarLeft = memo(
             onClick={handleCopyNodeName}
           />
         </Tooltip>
-        {showCopyRecoButton && (
-          <Tooltip placement="top" title="复制 Reco JSON">
-            <IconFont
-              className="icon-interactive"
-              name="icon-kapianshibie"
-              size={23}
-              onClick={handleCopyRecoJSON}
-            />
-          </Tooltip>
-        )}
       </div>
     );
   }

@@ -13,7 +13,6 @@ import {
   copyNodeName,
   saveNodeAsTemplate,
   deleteNode,
-  copyNodeRecoJSON,
 } from "./utils/nodeOperations";
 import { useDebugStore, type TestMode } from "../../../stores/debugStore";
 import { useMFWStore } from "../../../stores/mfwStore";
@@ -168,11 +167,6 @@ async function handleStartDebugFromNode(node: NodeContextMenuNode) {
     message.error("启动调试失败，请检查连接状态");
     useDebugStore.getState().stopDebug();
   }
-}
-
-/**复制 Reco JSON 处理器 */
-function handleCopyRecoJSON(node: NodeContextMenuNode) {
-  copyNodeRecoJSON(node.id);
 }
 
 /**
@@ -341,15 +335,6 @@ export function getNodeContextMenuConfig(
       icon: "icon-a-copyfubenfuzhi",
       iconSize: 16,
       onClick: handleCopyNodeName,
-    },
-    // 复制 Reco JSON
-    {
-      key: "copy-reco-json",
-      label: "复制 Reco JSON",
-      icon: "icon-kapianshibie",
-      iconSize: 18,
-      onClick: handleCopyRecoJSON,
-      visible: (node) => node.type === NodeTypeEnum.Pipeline,
     },
     // 保存为模板
     {

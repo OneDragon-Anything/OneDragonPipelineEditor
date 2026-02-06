@@ -1,12 +1,8 @@
 import { useState, useEffect } from "react";
-import { Modal, Form, Input, Select, message, Radio } from "antd";
-import { FileOutlined, DownloadOutlined } from "@ant-design/icons";
-import { useFileStore } from "../../stores/fileStore";
-import { useConfigStore } from "../../stores/configStore";
-import {
-  flowToPipelineString,
-  flowToSeparatedStrings,
-} from "../../core/parser";
+import { Modal, Form, Input, message } from "antd";
+import { DownloadOutlined, FileOutlined } from "@ant-design/icons";
+import { exportToPython } from "../../core/parser";
+import { useFlowStore } from "../../stores/flow";
 
 interface ExportFileModalProps {
   visible: boolean;
@@ -19,56 +15,26 @@ export const ExportFileModal: React.FC<ExportFileModalProps> = ({
 }) => {
   const [form] = Form.useForm();
   const [previewFileName, setPreviewFileName] = useState<string>("");
-  const [exportTarget, setExportTarget] = useState<
-    "pipeline" | "config" | "both"
-  >("both");
-
-  const currentFileName = useFileStore((state) => state.currentFile.fileName);
-  const configHandlingMode = useConfigStore(
-    (state) => state.configs.configHandlingMode
-  );
+  const { nodes, edges } = useFlowStore((state) => ({
+    nodes: state.nodes,
+    edges: state.edges,
+  }));
 
   useEffect(() => {
     if (visible) {
       form.resetFields();
-
-      // 从当前文件名提取基础名称
-      let baseName = currentFileName || "pipeline";
-      if (baseName.endsWith(".json")) {
-        baseName = baseName.slice(0, -5);
-      } else if (baseName.endsWith(".jsonc")) {
-        baseName = baseName.slice(0, -6);
-      }
-
       form.setFieldsValue({
-        fileName: baseName,
-        format: "json",
+        fileName: "generated_app",
       });
-
-      // 分离模式默认导出两个文件
-      setExportTarget(configHandlingMode === "separated" ? "both" : "pipeline");
-      setPreviewFileName(`${baseName}.json`);
+      setPreviewFileName("generated_app.py");
     }
-  }, [visible, form, currentFileName, configHandlingMode]);
+  }, [visible, form]);
 
   // 更新预览文件名
   const updatePreview = () => {
     const fileName = form.getFieldValue("fileName") || "";
-    const format = form.getFieldValue("format") || "json";
-
     if (fileName.trim()) {
-      if (configHandlingMode === "separated" && exportTarget === "both") {
-        setPreviewFileName(
-          `${fileName.trim()}.${format} + ${fileName.trim()}.mpe.json`
-        );
-      } else if (
-        configHandlingMode === "separated" &&
-        exportTarget === "config"
-      ) {
-        setPreviewFileName(`${fileName.trim()}.mpe.json`);
-      } else {
-        setPreviewFileName(`${fileName.trim()}.${format}`);
-      }
+      setPreviewFileName(`${fileName.trim()}.py`);
     } else {
       setPreviewFileName("");
     }
@@ -79,22 +45,9 @@ export const ExportFileModal: React.FC<ExportFileModalProps> = ({
     updatePreview();
   };
 
-  // 处理格式变化
-  const handleFormatChange = () => {
-    updatePreview();
-  };
-
-  // 处理导出目标变化
-  const handleExportTargetChange = (value: "pipeline" | "config" | "both") => {
-    setExportTarget(value);
-    updatePreview();
-  };
-
   // 验证文件名
   const validateFileName = (fileName: string): boolean => {
     if (!fileName || !fileName.trim()) return false;
-
-    // 检查是否包含非法字符
     const invalidChars = /[\\/:*?"<>|]/;
     return !invalidChars.test(fileName);
   };
@@ -102,71 +55,54 @@ export const ExportFileModal: React.FC<ExportFileModalProps> = ({
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
-      const { fileName, format } = values;
-
+      const { fileName } = values;
       const trimmedName = fileName.trim();
 
-      if (configHandlingMode === "separated") {
-        // 分离模式导出
-        const { pipelineString, configString } = flowToSeparatedStrings();
+      // 过滤 Pipeline 节点（导出用）
+      const pipelineNodes = nodes.filter((n) => n.type === "pipeline");
+      const flowEdges = edges.map(edge => ({
+        source: edge.source,
+        sourceHandle: edge.sourceHandle,
+        target: edge.target,
+        attributes: edge.attributes
+      }));
 
-        if (exportTarget === "both" || exportTarget === "pipeline") {
-          await exportFile(`${trimmedName}.${format}`, pipelineString, format);
-        }
+      // 生成 Python 代码
+      const { getExportMetadata } = await import("../../stores/fileStore");
+      const pythonCode = exportToPython(pipelineNodes as any, flowEdges, getExportMetadata());
 
-        if (exportTarget === "both" || exportTarget === "config") {
-          await exportFile(`${trimmedName}.mpe.json`, configString, "json");
-        }
-
-        message.success(
-          exportTarget === "both"
-            ? `已导出 ${trimmedName}.${format} 和 ${trimmedName}.mpe.json`
-            : exportTarget === "pipeline"
-            ? `已导出 ${trimmedName}.${format}`
-            : `已导出 ${trimmedName}.mpe.json`
-        );
-      } else {
-        // 集成模式导出
-        const content = flowToPipelineString();
-        await exportFile(`${trimmedName}.${format}`, content, format);
-        message.success(`已导出 ${trimmedName}.${format}`);
-      }
-
+      // 导出文件
+      await exportFile(`${trimmedName}.py`, pythonCode);
+      message.success(`已导出 ${trimmedName}.py`);
       onCancel();
     } catch (error) {
       console.error("[ExportFileModal] Failed to export file:", error);
+      message.error("导出失败");
     }
   };
 
   // 导出文件的通用函数
-  const exportFile = async (
-    fullFileName: string,
-    content: string,
-    format: string
-  ) => {
+  const exportFile = async (fullFileName: string, content: string) => {
     // 检查是否支持 File System Access API
     if ("showSaveFilePicker" in window) {
       try {
-        // 使用 File System Access API 选择保存位置
         const handle = await (window as any).showSaveFilePicker({
           suggestedName: fullFileName,
           types: [
             {
-              description: "JSON Files",
+              description: "Python Files",
               accept: {
-                "application/json": [`.${format}`],
+                "text/x-python": [".py"],
               },
             },
           ],
         });
 
-        // 创建可写流并写入内容
         const writable = await handle.createWritable();
         await writable.write(content);
         await writable.close();
         return;
       } catch (err: any) {
-        // 用户取消选择
         if (err.name === "AbortError") {
           throw err;
         }
@@ -178,7 +114,7 @@ export const ExportFileModal: React.FC<ExportFileModalProps> = ({
     }
 
     // 降级使用传统下载方式
-    const blob = new Blob([content], { type: "application/json" });
+    const blob = new Blob([content], { type: "text/x-python" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -198,7 +134,7 @@ export const ExportFileModal: React.FC<ExportFileModalProps> = ({
       title={
         <span>
           <DownloadOutlined />
-          <span style={{ marginLeft: 8 }}>导出为文件</span>
+          <span style={{ marginLeft: 8 }}>导出为 Python 文件</span>
         </span>
       }
       open={visible}
@@ -215,9 +151,6 @@ export const ExportFileModal: React.FC<ExportFileModalProps> = ({
         form={form}
         layout="vertical"
         autoComplete="off"
-        initialValues={{
-          format: "json",
-        }}
       >
         <Form.Item
           name="fileName"
@@ -245,30 +178,6 @@ export const ExportFileModal: React.FC<ExportFileModalProps> = ({
           />
         </Form.Item>
 
-        <Form.Item
-          name="format"
-          label="导出格式"
-          rules={[{ required: true, message: "请选择导出格式" }]}
-        >
-          <Select onChange={handleFormatChange}>
-            <Select.Option value="json">.json</Select.Option>
-            <Select.Option value="jsonc">.jsonc</Select.Option>
-          </Select>
-        </Form.Item>
-
-        {configHandlingMode === "separated" && (
-          <Form.Item label="导出目标">
-            <Radio.Group
-              value={exportTarget}
-              onChange={(e) => handleExportTargetChange(e.target.value)}
-            >
-              <Radio value="both">导出 Pipeline 和配置</Radio>
-              <Radio value="pipeline">仅导出 Pipeline</Radio>
-              <Radio value="config">仅导出配置</Radio>
-            </Radio.Group>
-          </Form.Item>
-        )}
-
         {previewFileName && (
           <Form.Item label="预览文件名">
             <div
@@ -288,11 +197,9 @@ export const ExportFileModal: React.FC<ExportFileModalProps> = ({
         <Form.Item>
           <div style={{ fontSize: 12, color: "#8c8c8c" }}>
             <div>提示：</div>
-            <div>• 将当前画布内容编译为 Pipeline 并导出</div>
-            {configHandlingMode === "separated" && (
-              <div>• 分离模式下可选择导出 Pipeline、配置或两者</div>
-            )}
+            <div>• 将当前画布内容编译为 OneDragon Python 代码并导出</div>
             <div>• 使用浏览器下载功能保存到本地</div>
+            <div>• 文件格式：Python (.py)</div>
           </div>
         </Form.Item>
       </Form>

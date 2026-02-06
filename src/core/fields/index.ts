@@ -39,9 +39,6 @@ export {
 // 工具函数
 export { generateParamKeys, generateUpperValues } from "./utils.js";
 
-// 辅助函数
-export { createField, createFields } from "./fieldFactory.js";
-
 // 生成参数键和大写值映射
 import { recoFields } from "./recognition/index.js";
 import { actionFields } from "./action/index.js";
