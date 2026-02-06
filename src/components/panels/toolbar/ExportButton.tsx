@@ -9,6 +9,7 @@ import {
 import { useFlowStore } from "../../../stores/flow";
 import { useShallow } from "zustand/shallow";
 import { exportToPython } from "../../../core/parser";
+import { getExportMetadata } from "../../../stores/fileStore";
 import { ClipboardHelper } from "../../../utils/clipboard";
 import style from "../../../styles/ToolbarPanel.module.less";
 
@@ -37,10 +38,11 @@ function ExportButton() {
     }));
     const flowEdges = edgesToExport.map(edge => ({
       source: edge.source,
+      sourceHandle: edge.sourceHandle,
       target: edge.target,
-      attributes: edge.data?.attributes
+      attributes: edge.attributes
     }));
-    return exportToPython(flowNodes, flowEdges);
+    return exportToPython(flowNodes, flowEdges, getExportMetadata());
   }, []);
 
   // 导出到粘贴板

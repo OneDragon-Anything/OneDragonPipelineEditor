@@ -45,6 +45,15 @@ function ImportButton() {
       clearHistory();
       setNodes(flowData.nodes);
       setEdges(flowData.edges);
+
+      // 保存 Python 元数据
+      const { useFileStore } = await import("../../../stores/fileStore");
+      useFileStore.getState().setFileConfig("pythonClassName", flowData.metadata.className);
+      useFileStore.getState().setFileConfig("pythonBaseClass", flowData.metadata.baseClass);
+      useFileStore.getState().setFileConfig("pythonImports", flowData.metadata.imports);
+      useFileStore.getState().setFileConfig("pythonClassVars", flowData.metadata.classVars);
+      useFileStore.getState().setFileConfig("pythonInitCode", flowData.metadata.initCode);
+
       saveHistory(0);  // 立即保存历史记录
 
       // 延迟触发自动布局

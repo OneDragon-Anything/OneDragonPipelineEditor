@@ -35,7 +35,7 @@ import ErrorPanel from "./components/panels/main/ErrorPanel";
 import RecognitionHistoryPanel from "./components/panels/main/RecognitionHistoryPanel";
 import ToolbarPanel from "./components/panels/main/ToolbarPanel";
 import { LoggerPanel } from "./components/panels/tools/LoggerPanel";
-import { pipelineToFlow } from "./core/parser";
+import { parsePythonFile, convertToFlowData } from "./core/parser";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import {
   getShareParam,
@@ -62,7 +62,7 @@ function starRemind() {
       <Button
         type="primary"
         onClick={() => {
-          window.open("https://github.com/kqcoxn/MaaPipelineEditor");
+          window.open("https://github.com/kqcoxn/OneDragonPipelineEditor");
           localStorage.setItem("mpe_stared", "true");
           notification.destroy();
         }}
@@ -92,7 +92,7 @@ function starRemind() {
   notification.open({
     title: "来点 Star，秋梨膏！",
     description:
-      "如果 MaaPipelineEditor 对您有帮助，可以为项目点一个免费的 Star⭐ 吗 QAQ",
+      "如果 OneDragonPipelineEditor 对您有帮助，可以为项目点一个免费的 Star⭐ 吗 QAQ",
     actions: operations,
     key,
     duration: 0,
@@ -120,17 +120,24 @@ function App() {
 
     const file = files[0];
     // 检查文件类型
-    if (!file.name.endsWith(".json") && !file.name.endsWith(".jsonc")) {
-      message.error("仅支持 .json 或 .jsonc 文件");
+    if (!file.name.endsWith(".py")) {
+      message.error("仅支持 .py 文件");
       return;
     }
 
     try {
       const text = await file.text();
-      const success = await pipelineToFlow({ pString: text });
-      if (success) {
-        message.success(`已导入文件: ${file.name}`);
-      }
+      const parsed = parsePythonFile(text);
+      const { nodes, edges, metadata } = convertToFlowData(parsed);
+      useFlowStore.getState().replace(nodes, edges, { skipSave: false });
+      useFlowStore.getState().initHistory(nodes, edges);
+      // 保存 Python 元数据到当前文件配置
+      useFileStore.getState().setFileConfig("pythonClassName", metadata.className);
+      useFileStore.getState().setFileConfig("pythonBaseClass", metadata.baseClass);
+      useFileStore.getState().setFileConfig("pythonImports", metadata.imports);
+      useFileStore.getState().setFileConfig("pythonClassVars", metadata.classVars);
+      useFileStore.getState().setFileConfig("pythonInitCode", metadata.initCode);
+      message.success(`已导入文件: ${file.name}`);
     } catch (err) {
       message.error("文件导入失败，请检查文件格式");
       console.error(err);

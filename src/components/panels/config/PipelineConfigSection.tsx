@@ -1,28 +1,30 @@
 import style from "../../../styles/ConfigPanel.module.less";
 
 import { memo, useMemo, useCallback } from "react";
-import { Popover, Select, Button, Switch, message } from "antd";
+import { Popover, Select, Button, Input, message } from "antd";
 import classNames from "classnames";
 
 import { useConfigStore } from "../../../stores/configStore";
 import { useFlowStore } from "../../../stores/flow";
+import { useFileStore } from "../../../stores/fileStore";
 import { HANDLE_DIRECTION_OPTIONS } from "../../flow/nodes/constants";
 import type { HandleDirection } from "../../flow/nodes/constants";
 import TipElem from "./TipElem";
 
 const PipelineConfigSection = memo(() => {
-  const nodeAttrExportStyle = useConfigStore(
-    (state) => state.configs.nodeAttrExportStyle
-  );
   const defaultHandleDirection = useConfigStore(
     (state) => state.configs.defaultHandleDirection
-  );
-  const exportDefaultRecoAction = useConfigStore(
-    (state) => state.configs.exportDefaultRecoAction
   );
   const setConfig = useConfigStore((state) => state.setConfig);
   const nodes = useFlowStore((state) => state.nodes);
   const setNodes = useFlowStore((state) => state.setNodes);
+  const pythonClassName = useFileStore(
+    (state) => state.currentFile.config.pythonClassName
+  );
+  const pythonBaseClass = useFileStore(
+    (state) => state.currentFile.config.pythonBaseClass
+  );
+  const setFileConfig = useFileStore((state) => state.setFileConfig);
 
   const globalClass = useMemo(() => classNames(style.item, style.global), []);
 
@@ -50,34 +52,6 @@ const PipelineConfigSection = memo(() => {
   return (
     <>
       <div className={style.divider}>————— Pipeline 配置 —————</div>
-      {/* 节点属性导出形式 */}
-      <div className={globalClass}>
-        <div className={style.key}>
-          <Popover
-            placement="bottomLeft"
-            title={"节点属性导出形式"}
-            content={
-              <TipElem
-                content={
-                  "对象形式：{ name: 'C', anchor: true, jump_back: true }\n前缀形式：'[Anchor][JumpBack]C'"
-                }
-              />
-            }
-          >
-            <span>节点属性导出形式</span>
-          </Popover>
-        </div>
-        <Select
-          className={style.value}
-          style={{ width: 90 }}
-          value={nodeAttrExportStyle}
-          onChange={(value) => setConfig("nodeAttrExportStyle", value)}
-          options={[
-            { value: "prefix", label: "前缀形式" },
-            { value: "object", label: "对象形式" },
-          ]}
-        />
-      </div>
       {/* 默认端点位置 */}
       <div className={globalClass}>
         <div className={style.key}>
@@ -120,30 +94,51 @@ const PipelineConfigSection = memo(() => {
           应用到所有节点
         </Button>
       </div>
-      {/* 导出默认识别/动作 */}
+      <div className={style.divider}>————— Python 导出 —————</div>
+      {/* 类名 */}
       <div className={globalClass}>
         <div className={style.key}>
           <Popover
             placement="bottomLeft"
-            title="导出默认识别/动作"
+            title="类名"
             content={
               <TipElem
-                content={
-                  "关闭时，导出时若节点的识别类型为 DirectHit 且无参数，则不导出 recognition 字段；\n若动作类型为 DoNothing 且无参数，则不导出 action 字段。\n两者独立检测。"
-                }
+                content="导出 Python 文件时生成的类名，留空则默认为 GeneratedApp"
               />
             }
           >
-            <span>导出默认识别/动作</span>
+            <span>类名</span>
           </Popover>
         </div>
-        <Switch
+        <Input
           className={style.value}
-          style={{ maxWidth: 60 }}
-          checked={exportDefaultRecoAction}
-          checkedChildren="导出"
-          unCheckedChildren="省略"
-          onChange={(checked) => setConfig("exportDefaultRecoAction", checked)}
+          size="small"
+          placeholder="GeneratedApp"
+          value={pythonClassName || ""}
+          onChange={(e) => setFileConfig("pythonClassName", e.target.value || undefined)}
+        />
+      </div>
+      {/* 基类 */}
+      <div className={globalClass}>
+        <div className={style.key}>
+          <Popover
+            placement="bottomLeft"
+            title="基类"
+            content={
+              <TipElem
+                content="导出 Python 文件时继承的基类名，留空则默认为 ZApplication"
+              />
+            }
+          >
+            <span>基类</span>
+          </Popover>
+        </div>
+        <Input
+          className={style.value}
+          size="small"
+          placeholder="ZApplication"
+          value={pythonBaseClass || ""}
+          onChange={(e) => setFileConfig("pythonBaseClass", e.target.value || undefined)}
         />
       </div>
     </>

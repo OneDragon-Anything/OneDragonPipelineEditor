@@ -19,6 +19,12 @@ export type FileConfigType = {
   // 节点顺序管理
   nodeOrderMap?: Record<string, number>;
   nextOrderNumber?: number;
+  // Python 导出元数据
+  pythonClassName?: string;
+  pythonBaseClass?: string;
+  pythonImports?: string[];
+  pythonClassVars?: Record<string, string>;
+  pythonInitCode?: string;
 };
 type FileType = {
   fileName: string;
@@ -145,6 +151,24 @@ export function getNodeOrder(nodeId: string): number | undefined {
   return state.currentFile.config.nodeOrderMap?.[nodeId];
 }
 
+/** 获取当前文件的 Python 导出元数据 */
+export function getExportMetadata(): {
+  className?: string;
+  baseClass?: string;
+  imports?: string[];
+  classVars?: Record<string, string>;
+  initCode?: string;
+} {
+  const config = useFileStore.getState().currentFile.config;
+  return {
+    className: config.pythonClassName,
+    baseClass: config.pythonBaseClass,
+    imports: config.pythonImports,
+    classVars: config.pythonClassVars,
+    initCode: config.pythonInitCode,
+  };
+}
+
 /**文件仓库 */
 type FileState = {
   files: FileType[];
@@ -163,8 +187,6 @@ type FileState = {
   openFileFromLocal: (
     filePath: string,
     content: any,
-    mpeConfig?: any,
-    configPath?: string
   ) => Promise<boolean>;
   saveFileToLocal: (filePath?: string) => Promise<boolean>;
   markFileDeleted: (filePath: string) => void;
@@ -335,60 +357,58 @@ export const useFileStore = create<FileState>()((set) => ({
     return null;
   },
 
-  // 从本地打开文件
+  // 从本地打开文件（Python 格式）
   async openFileFromLocal(
     filePath: string,
     content: any,
-    mpeConfig?: any,
-    configPath?: string
   ): Promise<boolean> {
     try {
-      const { pipelineToFlow, mergePipelineAndConfig } = await import(
+      const { parsePythonFile, convertToFlowData } = await import(
         "../core/parser"
       );
       const contentString =
-        typeof content === "string" ? content : JSON.stringify(content);
+        typeof content === "string" ? content : String(content);
 
-      // 合并配置文件
-      let finalContentString = contentString;
-      if (mpeConfig) {
-        try {
-          const pipelineObj = JSON.parse(contentString);
-          const mergedPipeline = mergePipelineAndConfig(pipelineObj, mpeConfig);
-          finalContentString = JSON.stringify(mergedPipeline);
-        } catch (error) {
-          console.error(
-            "[fileStore] Failed to merge config, using pipeline only:",
-            error
-          );
-        }
-      }
+      // 解析 Python 文件
+      const parsed = parsePythonFile(contentString);
+      const { nodes, edges, metadata } = convertToFlowData(parsed);
+
+      // 构建 Python 元数据配置
+      const pythonMeta = {
+        pythonClassName: metadata.className,
+        pythonBaseClass: metadata.baseClass,
+        pythonImports: metadata.imports,
+        pythonClassVars: metadata.classVars,
+        pythonInitCode: metadata.initCode,
+      };
 
       // 查找是否已有相同路径的文件打开
       const existingFile = useFileStore
         .getState()
         .files.find((file) => file.config.filePath === filePath);
 
+      const applyParsedData = () => {
+        useFlowStore.getState().replace(nodes, edges, { skipSave: false });
+        useFlowStore.getState().initHistory(nodes, edges);
+      };
+
       if (existingFile) {
         // 切换到已有文件并更新内容
         useFileStore.getState().switchFile(existingFile.fileName);
-        await pipelineToFlow({ pString: finalContentString });
-        // 更新同步时间和配置路径
+        applyParsedData();
+        // 更新同步时间和 Python 元数据
         set((state) => {
-          const config = {
+          state.currentFile.config = {
             ...state.currentFile.config,
+            ...pythonMeta,
             lastSyncTime: Date.now(),
           };
-          if (configPath) {
-            config.separatedConfigPath = configPath;
-          }
-          state.currentFile.config = config;
           return {};
         });
         return true;
       }
 
-      // 直接导入
+      // 直接导入到空文件
       const currentFile = useFileStore.getState().currentFile;
       if (
         currentFile.nodes.length === 0 &&
@@ -396,17 +416,14 @@ export const useFileStore = create<FileState>()((set) => ({
         !currentFile.config.filePath
       ) {
         const savedViewport = currentFile.config.savedViewport;
-        await pipelineToFlow({ pString: finalContentString });
+        applyParsedData();
         set((state) => {
-          const config = {
+          state.currentFile.config = {
             ...state.currentFile.config,
+            ...pythonMeta,
             filePath,
             lastSyncTime: Date.now(),
           };
-          if (configPath) {
-            config.separatedConfigPath = configPath;
-          }
-          state.currentFile.config = config;
           return {};
         });
         // 恢复视口
@@ -423,17 +440,14 @@ export const useFileStore = create<FileState>()((set) => ({
 
       // 新建文件
       useFileStore.getState().addFile({ isSwitch: true });
-      await pipelineToFlow({ pString: finalContentString });
+      applyParsedData();
       set((state) => {
-        const config = {
+        state.currentFile.config = {
           ...state.currentFile.config,
+          ...pythonMeta,
           filePath,
           lastSyncTime: Date.now(),
         };
-        if (configPath) {
-          config.separatedConfigPath = configPath;
-        }
-        state.currentFile.config = config;
         return {};
       });
       return true;
@@ -443,14 +457,11 @@ export const useFileStore = create<FileState>()((set) => ({
     }
   },
 
-  // 保存文件到本地
+  // 保存文件到本地（Python 格式）
   async saveFileToLocal(filePath?: string): Promise<boolean> {
     try {
-      const { flowToPipeline, flowToSeparatedStrings, splitPipelineAndConfig } =
-        await import("../core/parser");
+      const { exportToPython } = await import("../core/parser");
       const currentFile = useFileStore.getState().currentFile;
-      const configHandlingMode =
-        useConfigStore.getState().configs.configHandlingMode;
       const targetFilePath = filePath || currentFile.config.filePath;
 
       if (!targetFilePath) {
@@ -465,66 +476,37 @@ export const useFileStore = create<FileState>()((set) => ({
         return false;
       }
 
-      let success = false;
+      // 使用 Python 导出格式
+      const flowState = useFlowStore.getState();
+      const pipelineNodes = flowState.nodes.filter((n) => n.type === "pipeline");
+      const flowEdges = flowState.edges.map(edge => ({
+        source: edge.source,
+        sourceHandle: edge.sourceHandle,
+        target: edge.target,
+        attributes: edge.attributes
+      }));
+      const pythonCode = exportToPython(
+        pipelineNodes as any,
+        flowEdges,
+        getExportMetadata()
+      );
 
-      if (configHandlingMode === "separated") {
-        // 分离模式保存
-        const { pipelineString, configString } = flowToSeparatedStrings();
-        const pipeline = JSON.parse(pipelineString);
-        const config = JSON.parse(configString);
+      const success = localServer.send("/etl/save_file", {
+        file_path: targetFilePath,
+        content: pythonCode,
+      });
 
-        // 生成配置文件路径
-        // 从完整路径中提取目录和文件名
-        const lastSlashIndex = Math.max(
-          targetFilePath.lastIndexOf("/"),
-          targetFilePath.lastIndexOf("\\")
-        );
-        const directory = targetFilePath.substring(0, lastSlashIndex + 1);
-        const fileName = targetFilePath.substring(lastSlashIndex + 1);
-        const baseName = fileName.replace(/\.(json|jsonc)$/i, "");
-        const configPath = `${directory}.${baseName}.mpe.json`;
-
-        success = localServer.send("/etl/save_separated", {
-          pipeline_path: targetFilePath,
-          config_path: configPath,
-          pipeline,
-          config,
+      if (success) {
+        // 更新文件路径和同步时间
+        set((state) => {
+          const config = {
+            ...state.currentFile.config,
+            filePath: targetFilePath,
+            lastSyncTime: Date.now(),
+          };
+          state.currentFile.config = config;
+          return {};
         });
-
-        if (success) {
-          // 更新文件路径和配置文件路径
-          set((state) => {
-            const config = {
-              ...state.currentFile.config,
-              filePath: targetFilePath,
-              separatedConfigPath: configPath,
-              lastSyncTime: Date.now(),
-            };
-            state.currentFile.config = config;
-            return {};
-          });
-        }
-      } else {
-        // 集成模式或不导出模式
-        const pipeline = flowToPipeline();
-
-        success = localServer.send("/etl/save_file", {
-          file_path: targetFilePath,
-          content: pipeline,
-        });
-
-        if (success) {
-          // 更新文件路径和同步时间
-          set((state) => {
-            const config = {
-              ...state.currentFile.config,
-              filePath: targetFilePath,
-              lastSyncTime: Date.now(),
-            };
-            state.currentFile.config = config;
-            return {};
-          });
-        }
       }
 
       return success;
@@ -569,9 +551,9 @@ export const useFileStore = create<FileState>()((set) => ({
   // 重新加载文件
   async reloadFileFromLocal(filePath: string, content: any): Promise<boolean> {
     try {
-      const { pipelineToFlow } = await import("../core/parser");
+      const { parsePythonFile, convertToFlowData } = await import("../core/parser");
       const contentString =
-        typeof content === "string" ? content : JSON.stringify(content);
+        typeof content === "string" ? content : String(content);
 
       // 查找文件
       const targetFile = useFileStore
@@ -586,15 +568,23 @@ export const useFileStore = create<FileState>()((set) => ({
       // 切换到该文件
       useFileStore.getState().switchFile(targetFile.fileName);
 
-      // 重新加载Pipeline
-      await pipelineToFlow({ pString: contentString });
+      // 解析 Python 文件并替换 Flow 数据
+      const parsed = parsePythonFile(contentString);
+      const { nodes, edges, metadata } = convertToFlowData(parsed);
+      useFlowStore.getState().replace(nodes, edges, { skipSave: false });
+      useFlowStore.getState().initHistory(nodes, edges);
 
-      // 清除修改标记并更新同步时间
+      // 清除修改标记并更新同步时间和 Python 元数据
       set((state) => {
         const config = {
           ...state.currentFile.config,
           isModifiedExternally: false,
           lastSyncTime: Date.now(),
+          pythonClassName: metadata.className,
+          pythonBaseClass: metadata.baseClass,
+          pythonImports: metadata.imports,
+          pythonClassVars: metadata.classVars,
+          pythonInitCode: metadata.initCode,
         };
         state.currentFile.config = config;
         return {};

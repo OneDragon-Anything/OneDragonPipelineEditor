@@ -6,6 +6,7 @@ import { CloseOutlined, ReloadOutlined, CopyOutlined } from "@ant-design/icons";
 
 import { useToolbarStore } from "../stores/toolbarStore";
 import { exportToPython } from "../core/parser";
+import { getExportMetadata } from "../stores/fileStore";
 import { useFlowStore } from "../stores/flow";
 import { ClipboardHelper } from "../utils/clipboard";
 
@@ -42,12 +43,13 @@ function PythonViewer() {
         }));
       const flowEdges = edges.map(edge => ({
         source: edge.source,
+        sourceHandle: edge.sourceHandle,
         target: edge.target,
         attributes: edge.attributes
       }));
       
       // 直接调用 exportToPython 生成代码
-      const code = exportToPython(flowNodes, flowEdges);
+      const code = exportToPython(flowNodes, flowEdges, getExportMetadata());
       setPythonCode(code);
     } catch (err) {
       console.error("Python 编译失败:", err);

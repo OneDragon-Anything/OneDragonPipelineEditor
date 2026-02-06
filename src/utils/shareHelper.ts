@@ -1,12 +1,13 @@
 /**
  * 分享工具模块 - 用于生成和解析分享链接
  *
- * 使用 lz-string 压缩 pipeline JSON，通过 URL 参数分享
+ * 使用 lz-string 压缩 Python 代码，通过 URL 参数分享
  */
 
 import LZString from "lz-string";
-import { flowToPipeline, pipelineToFlow } from "../core/parser";
+import { exportToPython, parsePythonFile, convertToFlowData } from "../core/parser";
 import { message } from "antd";
+import { useFlowStore } from "../stores/flow";
 
 // URL 参数名
 const SHARE_PARAM = "shared";
@@ -28,15 +29,15 @@ export type StartInDirectory =
   | "videos";
 
 /**
- * 编码分享内容
- * @param pipelineObj pipeline 对象
+ * 编码分享内容（Python 代码）
+ * @param pythonCode Python 代码字符串
  * @returns 压缩后的字符串
  */
-function encodeShareContent(pipelineObj: any): string {
+function encodeShareContent(pythonCode: string): string {
   // 包装版本号
   const payload = {
     v: SHARE_VERSION,
-    d: pipelineObj,
+    d: pythonCode,
   };
   const jsonString = JSON.stringify(payload);
   // 压缩字符串
@@ -47,9 +48,9 @@ function encodeShareContent(pipelineObj: any): string {
 /**
  * 解码分享内容
  * @param compressed 压缩字符串
- * @returns pipeline 对象，失败返回 null
+ * @returns Python 代码字符串，失败返回 null
  */
-function decodeShareContent(compressed: string): any | null {
+function decodeShareContent(compressed: string): string | null {
   try {
     const jsonString = LZString.decompressFromEncodedURIComponent(compressed);
     if (!jsonString) {
@@ -78,16 +79,33 @@ function decodeShareContent(compressed: string): any | null {
  */
 export async function generateShareLink(): Promise<boolean> {
   try {
-    // 强制使用集成模式编译当前 pipeline
-    const pipelineObj = flowToPipeline({ forceExportConfig: true });
+    // 获取当前流程图信息
+    const { nodes, edges } = useFlowStore.getState();
 
-    if (!pipelineObj || Object.keys(pipelineObj).length === 0) {
+    if (!nodes || nodes.length === 0) {
       message.warning("当前画布为空，无法生成分享链接");
       return false;
     }
 
+    // 生成 Python 代码
+    // 过滤 Pipeline 节点（导出用）
+    const pipelineNodes = nodes.filter((n) => n.type === "pipeline");
+    const flowEdges = edges.map(edge => ({
+      source: edge.source,
+      sourceHandle: edge.sourceHandle,
+      target: edge.target,
+      attributes: edge.attributes
+    }));
+    const { getExportMetadata } = await import("../stores/fileStore");
+    const pythonCode = exportToPython(pipelineNodes as any, flowEdges, getExportMetadata());
+
+    if (!pythonCode) {
+      message.warning("生成 Python 代码失败");
+      return false;
+    }
+
     // 压缩编码
-    const compressed = encodeShareContent(pipelineObj);
+    const compressed = encodeShareContent(pythonCode);
 
     // 构建 URL
     const baseUrl = window.location.origin + window.location.pathname;
@@ -214,8 +232,8 @@ export async function loadFromShareUrl(): Promise<boolean> {
 
   try {
     // 解码
-    const pipelineObj = decodeShareContent(shareParam);
-    if (!pipelineObj) {
+    const pythonCode = decodeShareContent(shareParam);
+    if (!pythonCode) {
       message.error("分享链接解析失败，请检查链接是否完整");
       clearShareParam();
       return false;
@@ -231,17 +249,30 @@ export async function loadFromShareUrl(): Promise<boolean> {
       return false;
     }
 
-    // 导入到新文件
-    const pString = JSON.stringify(pipelineObj);
-    const success = await pipelineToFlow({ pString });
+    // 解析 Python 代码
+    try {
+      const parsed = parsePythonFile(pythonCode);
+      const flowData = convertToFlowData(parsed);
 
-    if (success) {
+      // 更新 Flow Store
+      useFlowStore.getState().setNodes(flowData.nodes);
+      useFlowStore.getState().setEdges(flowData.edges);
+
+      // 保存 Python 元数据
+      const { useFileStore } = await import("../stores/fileStore");
+      useFileStore.getState().setFileConfig("pythonClassName", flowData.metadata.className);
+      useFileStore.getState().setFileConfig("pythonBaseClass", flowData.metadata.baseClass);
+      useFileStore.getState().setFileConfig("pythonImports", flowData.metadata.imports);
+      useFileStore.getState().setFileConfig("pythonClassVars", flowData.metadata.classVars);
+      useFileStore.getState().setFileConfig("pythonInitCode", flowData.metadata.initCode);
+
       message.success("已从分享链接加载 Pipeline");
       // 清除 URL 参数
       clearShareParam();
       return true;
-    } else {
-      message.error("分享内容导入失败");
+    } catch (parseErr) {
+      console.error("[shareHelper] Python 解析失败:", parseErr);
+      message.error("分享内容格式错误");
       clearShareParam();
       return false;
     }
@@ -285,9 +316,9 @@ export async function importFromLocalFile(
       startIn: startIn || "downloads",
       types: [
         {
-          description: "JSON Files",
+          description: "Python Files",
           accept: {
-            "application/json": [".json", ".jsonc"],
+            "text/x-python": [".py"],
           },
         },
       ],
@@ -298,15 +329,6 @@ export async function importFromLocalFile(
     const file = await fileHandle.getFile();
     const content = await file.text();
 
-    // 解析 JSON
-    let pipelineObj;
-    try {
-      pipelineObj = JSON.parse(content);
-    } catch {
-      message.error("文件内容不是有效的 JSON 格式");
-      return false;
-    }
-
     // 新建文件用于加载内容
     const { useFileStore } = await import("../stores/fileStore");
     const newFileName = useFileStore.getState().addFile({ isSwitch: true });
@@ -316,15 +338,28 @@ export async function importFromLocalFile(
       return false;
     }
 
-    // 导入到新文件
-    const pString = JSON.stringify(pipelineObj);
-    const success = await pipelineToFlow({ pString });
+    // 解析 Python 代码
+    try {
+      const parsed = parsePythonFile(content);
+      const flowData = convertToFlowData(parsed);
 
-    if (success) {
+      // 更新 Flow Store
+      useFlowStore.getState().setNodes(flowData.nodes);
+      useFlowStore.getState().setEdges(flowData.edges);
+
+      // 保存 Python 元数据
+      const { useFileStore } = await import("../stores/fileStore");
+      useFileStore.getState().setFileConfig("pythonClassName", flowData.metadata.className);
+      useFileStore.getState().setFileConfig("pythonBaseClass", flowData.metadata.baseClass);
+      useFileStore.getState().setFileConfig("pythonImports", flowData.metadata.imports);
+      useFileStore.getState().setFileConfig("pythonClassVars", flowData.metadata.classVars);
+      useFileStore.getState().setFileConfig("pythonInitCode", flowData.metadata.initCode);
+
       message.success(`已从 ${file.name} 导入 Pipeline`);
       return true;
-    } else {
-      message.error("文件导入失败");
+    } catch (parseErr) {
+      console.error("[shareHelper] Python 解析失败:", parseErr);
+      message.error("文件格式错误或解析失败");
       return false;
     }
   } catch (err: any) {
