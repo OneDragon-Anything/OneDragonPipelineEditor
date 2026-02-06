@@ -11,7 +11,6 @@ import {
   type NodeContextMenuWithChildren,
   type NodeContextMenuSubItem,
 } from "../nodeContextMenu";
-import { useDebugStore } from "../../../../stores/debugStore";
 
 interface NodeContextMenuProps {
   node: NodeContextMenuNode;
@@ -23,9 +22,6 @@ interface NodeContextMenuProps {
 /**节点右键菜单组件 */
 export const NodeContextMenu = memo<NodeContextMenuProps>(
   ({ node, children, open, onOpenChange }) => {
-    // 监听 debugMode 变化
-    const debugMode = useDebugStore((state) => state.debugMode);
-
     // 生成菜单项
     const menuItems = useMemo<MenuProps["items"]>(() => {
       const config = getNodeContextMenuConfig(node);
@@ -152,7 +148,7 @@ export const NodeContextMenu = memo<NodeContextMenuProps>(
             danger: menuItem.danger,
           };
         });
-    }, [node, onOpenChange, debugMode]);
+    }, [node, onOpenChange]);
 
     return (
       <Dropdown

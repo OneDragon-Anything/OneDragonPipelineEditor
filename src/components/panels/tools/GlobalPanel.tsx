@@ -1,17 +1,13 @@
 import { memo, useMemo, useState } from "react";
-import { message, Tooltip, Popover, Modal } from "antd";
+import { message, Tooltip, Popover } from "antd";
 import classNames from "classnames";
 import IconFont from "../../iconfonts";
 import { type IconNames } from "../../iconfonts";
 import { useFlowStore } from "../../../stores/flow";
 import { useConfigStore } from "../../../stores/configStore";
 import { useClipboardStore } from "../../../stores/clipboardStore";
-import { useDebugStore } from "../../../stores/debugStore";
-import { useMFWStore } from "../../../stores/mfwStore";
 import PathSelector from "./PathSelector";
-import ToolboxPanel from "./ToolboxPanel";
 import style from "../../../styles/ToolPanel.module.less";
-import debugStyle from "../../../styles/DebugPanel.module.less";
 
 /**全局工具 */
 type GlobalToolType = {
@@ -40,9 +36,6 @@ function GlobalPanel() {
   const redo = useFlowStore((state) => state.redo);
   const getHistoryState = useFlowStore((state) => state.getHistoryState);
   const pathMode = useFlowStore((state) => state.pathMode);
-  const debugMode = useDebugStore((state) => state.debugMode);
-  const toggleDebugMode = useDebugStore((state) => state.toggleDebugMode);
-  const connectionStatus = useMFWStore((state) => state.connectionStatus);
 
   // 历史状态
   const [, forceUpdate] = useState({});
@@ -192,85 +185,6 @@ function GlobalPanel() {
               />
             </Tooltip>
           </Popover>
-        </li>
-      </div>
-      {/* 工具箱按钮 */}
-      <div className={style.group}>
-        <div className={style.devider}>
-          <div></div>
-        </div>
-        <li className={style.item}>
-          <Popover
-            placement="bottom"
-            title="工具箱"
-            content={<ToolboxPanel />}
-            trigger="click"
-          >
-            <Tooltip placement="bottom" title="工具箱">
-              <IconFont
-                className={style.icon}
-                name="icon-gongjuxiang"
-                size={24}
-              />
-            </Tooltip>
-          </Popover>
-        </li>
-      </div>
-      {/* 调试模式按钮 */}
-      <div className={style.group}>
-        <div className={style.devider}>
-          <div></div>
-        </div>
-        <li className={style.item}>
-          <Tooltip
-            placement="bottom"
-            title={
-              <span>
-                {debugMode ? "调试模式(已开启)" : "调试模式(已关闭)"}
-                {connectionStatus !== "connected" && (
-                  <span
-                    className={debugStyle["debug-connection-indicator"]}
-                    style={{
-                      backgroundColor:
-                        connectionStatus === "connecting"
-                          ? "#faad14"
-                          : connectionStatus === "failed"
-                          ? "#ff4d4f"
-                          : "#d9d9d9",
-                    }}
-                  />
-                )}
-              </span>
-            }
-          >
-            <IconFont
-              style={{ opacity: debugMode ? 1 : 0.4 }}
-              className={style.icon}
-              name="icon-tiaoshi"
-              size={24}
-              onClick={() => {
-                if (connectionStatus !== "connected") {
-                  message.error("请先连接本地服务与设备");
-                  return;
-                }
-                if (!debugMode) {
-                  Modal.info({
-                    title: "调试模式提示",
-                    content:
-                      "调试功能目前仍在开发阶段，部分功能可能不完整或存在不稳定情况，敬请谅解。",
-                    okText: "我知道了",
-                    onOk: () => {
-                      toggleDebugMode();
-                      message.success("已开启调试模式");
-                    },
-                  });
-                } else {
-                  toggleDebugMode();
-                  message.success("已关闭调试模式");
-                }
-              }}
-            />
-          </Tooltip>
         </li>
       </div>
     </ul>

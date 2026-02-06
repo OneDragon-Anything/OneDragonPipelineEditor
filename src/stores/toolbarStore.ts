@@ -27,8 +27,6 @@ export type RightPanelType = "json" | "field" | "edge" | null;
 interface ToolbarState {
   // JSON 面板显示状态
   jsonPanelVisible: boolean;
-  // 识别记录面板显示状态
-  recognitionPanelVisible: boolean;
   // 当前打开的右侧面板类型
   currentRightPanel: RightPanelType;
   // 默认导入操作
@@ -39,8 +37,6 @@ interface ToolbarState {
   // Actions
   setJsonPanelVisible: (visible: boolean) => void;
   toggleJsonPanel: () => void;
-  setRecognitionPanelVisible: (visible: boolean) => void;
-  toggleRecognitionPanel: () => void;
   setCurrentRightPanel: (panel: RightPanelType) => void;
   setDefaultImportAction: (action: ImportAction) => void;
   setDefaultExportAction: (action: ExportAction) => void;
@@ -88,7 +84,6 @@ function isValidExportAction(action: string): boolean {
 
 export const useToolbarStore = create<ToolbarState>((set) => ({
   jsonPanelVisible: false,
-  recognitionPanelVisible: false,
   currentRightPanel: null,
   defaultImportAction: getDefaultImportAction(),
   defaultExportAction: getDefaultExportAction(),
@@ -110,15 +105,6 @@ export const useToolbarStore = create<ToolbarState>((set) => ({
         currentRightPanel: newVisible ? "json" : null,
       };
     }),
-
-  setRecognitionPanelVisible: (visible: boolean) => {
-    set({ recognitionPanelVisible: visible });
-  },
-
-  toggleRecognitionPanel: () =>
-    set((state) => ({
-      recognitionPanelVisible: !state.recognitionPanelVisible,
-    })),
 
   setCurrentRightPanel: (panel: RightPanelType) => {
     set({ currentRightPanel: panel });

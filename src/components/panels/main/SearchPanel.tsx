@@ -176,20 +176,17 @@ function SearchPanel() {
         type: node.type,
       };
 
-      // Pipeline 节点包含识别和动作信息
+      // Pipeline 节点包含 OneDragon 格式信息
       if (node.type === NodeTypeEnum.Pipeline) {
         const pipelineNode = node as any;
         return {
           ...baseInfo,
-          recognition: {
-            type: pipelineNode.data.recognition?.type || "无",
-            param: pipelineNode.data.recognition?.param || {},
-          },
-          action: {
-            type: pipelineNode.data.action?.type || "无",
-            param: pipelineNode.data.action?.param || {},
-          },
-          others: pipelineNode.data.others || {},
+          methodName: pipelineNode.data.methodName || "",
+          isStartNode: pipelineNode.data.isStartNode || false,
+          nodeFrom: pipelineNode.data.nodeFrom || [],
+          nodeNotify: pipelineNode.data.nodeNotify || [],
+          code: pipelineNode.data.code ? pipelineNode.data.code.substring(0, 200) : "",
+          comment: pipelineNode.data.comment || "",
         };
       }
 
@@ -222,13 +219,14 @@ function SearchPanel() {
 1. 仅返回最匹配的节点名称（label字段的值），不要有任何其他说明文字
 2. 如果没有任何相关节点，返回：NOT_FOUND
 3. 节点类型说明：pipeline=流程节点，external=外部节点，anchor=锚点节点
-4. 对于pipeline节点：
-   - recognition 是识别方式，包含 type（识别类型）和 param（具体参数）
-   - action 是动作方式，包含 type（动作类型）和 param（具体参数）
-   - others 是其他配置参数
-5. 识别常见字段：template（模板图片）、threshold（阈值）、roi（识别区域）、expected（期望文本）等
-6. 动作常见字段：target（目标位置）、input_text（输入文本）、package（应用包名）等
-7. 根据用户描述，从节点的识别内容、动作内容、配置参数等维度综合判断最匹配的节点
+4. 对于pipeline节点（OneDragon格式）：
+   - methodName 是 Python 方法名
+   - isStartNode 表示是否为起始节点
+   - nodeFrom 是来源连接列表，定义节点间的触发关系
+   - nodeNotify 是通知配置列表，定义节点完成时的通知
+   - code 是方法体代码片段
+   - comment 是节点注释/描述
+5. 根据用户描述，从节点名称、方法名、代码内容、注释等维度综合判断最匹配的节点
 
 节点列表：
 ${JSON.stringify(nodesContext, null, 2)}`;

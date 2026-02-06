@@ -1,5 +1,4 @@
 import style from "../../styles/edges.module.less";
-import debugStyle from "../../styles/DebugPanel.module.less";
 
 import { memo, useMemo, useState, useCallback, useRef, useEffect } from "react";
 import {
@@ -13,7 +12,6 @@ import { useShallow } from "zustand/shallow";
 
 import { useConfigStore } from "../../stores/configStore";
 import { useFlowStore } from "../../stores/flow";
-import { useDebugStore } from "../../stores/debugStore";
 import { getHandlePositions, DEFAULT_HANDLE_DIRECTION } from "./nodes";
 import type { HandleDirection } from "./nodes";
 
@@ -377,14 +375,6 @@ function MarkedEdge(props: EdgeProps) {
     }))
   );
 
-  // 获取调试状态
-  const { debugMode, executedNodes } = useDebugStore(
-    useShallow((state) => ({
-      debugMode: state.debugMode,
-      executedNodes: state.executedNodes,
-    }))
-  );
-
   // 计算是否与选中元素相关联
   const isRelated = useMemo(() => {
     if (focusOpacity === 1) return true;
@@ -427,24 +417,15 @@ function MarkedEdge(props: EdgeProps) {
     }
     // 不再根据条件设置边颜色，使用默认的流动样式
 
-    // 如果 source 和 target 都已执行，则边也标记为已执行
-    const isExecuted =
-      debugMode &&
-      executedNodes.has(props.source) &&
-      executedNodes.has(props.target);
-
     return classNames(
       style.edge,
-      markClass,
-      isExecuted && debugStyle["debug-edge-executed"]
+      markClass
     );
   }, [
     props.selected,
     edge,
     props.source,
     props.target,
-    debugMode,
-    executedNodes,
   ]);
 
   const labelStyle = useMemo(() => {

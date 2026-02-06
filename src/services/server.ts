@@ -7,10 +7,8 @@ import {
 import { message, notification, Button } from "antd";
 import { createElement } from "react";
 import { FileProtocol } from "./protocols/FileProtocol";
-import { MFWProtocol } from "./protocols/MFWProtocol";
 import { ErrorProtocol } from "./protocols/ErrorProtocol";
 import { ConfigProtocol } from "./protocols/ConfigProtocol";
-import { DebugProtocol } from "./protocols/DebugProtocol";
 import { ResourceProtocol } from "./protocols/ResourceProtocol";
 import { LoggerProtocol } from "./protocols/LoggerProtocol";
 import { globalConfig } from "../stores/configStore";
@@ -335,10 +333,8 @@ export const localServer = new LocalWebSocketServer();
 
 // 创建全局协议实例
 export const fileProtocol = new FileProtocol();
-export const mfwProtocol = new MFWProtocol();
 export const errorProtocol = new ErrorProtocol();
 export const configProtocol = new ConfigProtocol();
-export const debugProtocol = new DebugProtocol();
 export const resourceProtocol = new ResourceProtocol();
 export const loggerProtocol = new LoggerProtocol();
 
@@ -353,14 +349,8 @@ export function initializeWebSocket() {
   // 注册 FileProtocol
   fileProtocol.register(localServer);
 
-  // 注册 MFWProtocol
-  mfwProtocol.register(localServer);
-
   // 注册 ConfigProtocol
   configProtocol.register(localServer);
-
-  // 注册 DebugProtocol
-  debugProtocol.register(localServer);
 
   // 注册 ResourceProtocol
   resourceProtocol.register(localServer);

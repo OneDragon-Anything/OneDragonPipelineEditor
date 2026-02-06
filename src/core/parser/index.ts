@@ -18,8 +18,4 @@ export type {
   NodeType,
   EdgeType,
   PipelineNodeType,
-  RecognitionParamType,
-  ActionParamType,
-  OtherParamType,
-  ParamType,
 } from "./types";

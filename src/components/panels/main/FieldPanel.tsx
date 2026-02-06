@@ -9,7 +9,7 @@ import {
   type ReactNode,
   useEffect,
 } from "react";
-import { Tooltip, Spin, Alert, Button, Tabs } from "antd";
+import { Tooltip, Spin, Alert, Button } from "antd";
 import classNames from "classnames";
 import IconFont from "../../iconfonts";
 
@@ -27,11 +27,8 @@ import {
   AnchorEditor,
 } from "../node-editors";
 import { FieldPanelToolbarLeft, FieldPanelToolbarRight } from "../field/tools";
-import { useDebugStore } from "../../../stores/debugStore";
 import { useToolbarStore } from "../../../stores/toolbarStore";
 import { useConfigStore } from "../../../stores/configStore";
-import RecognitionCardList from "../tools/RecognitionCardList";
-import NodeRecognitionCardList from "../tools/NodeRecognitionCardList";
 import { DraggablePanel } from "../common/DraggablePanel";
 
 // 节点数据验证与修复 - OneDragon 格式
@@ -164,7 +161,6 @@ class EditorErrorBoundary extends Component<
 function FieldPanel() {
   const currentNode = useFlowStore((state) => state.targetNode);
   const updateNodes = useFlowStore((state) => state.updateNodes);
-  const debugMode = useDebugStore((state) => state.debugMode);
   const fieldPanelMode = useConfigStore(
     (state) => state.configs.fieldPanelMode
   );
@@ -177,7 +173,6 @@ function FieldPanel() {
   const [validationWarning, setValidationWarning] = useState<string | null>(
     null
   );
-  const [activeTab, setActiveTab] = useState("fields");
 
   // 当面板打开时通知 toolbarStore
   useEffect(() => {
@@ -412,46 +407,7 @@ function FieldPanel() {
           />
         </div>
       )}
-      {/* 调试模式下显示卡片列表，否则显示编辑器 */}
-      {debugMode && currentNode ? (
-        <Tabs
-          activeKey={activeTab}
-          onChange={setActiveTab}
-          type="card"
-          size="small"
-          items={[
-            {
-              key: "fields",
-              label: "字段配置",
-              children: renderContent,
-            },
-            {
-              key: "source",
-              label: "出发节点记录",
-              children: (
-                <NodeRecognitionCardList
-                  nodeName={currentNode.data?.label || ""}
-                  filterMode="source"
-                />
-              ),
-            },
-            {
-              key: "target",
-              label: "目标节点记录",
-              children: (
-                <NodeRecognitionCardList
-                  nodeName={currentNode.data?.label || ""}
-                  filterMode="target"
-                />
-              ),
-            },
-          ]}
-          style={{ flex: 1, display: "flex", flexDirection: "column" }}
-          tabBarStyle={{ margin: 0, paddingLeft: 12, paddingRight: 12 }}
-        />
-      ) : (
-        renderContent
-      )}
+      {renderContent}
     </>
   );
 

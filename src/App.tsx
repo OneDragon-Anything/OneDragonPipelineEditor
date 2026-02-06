@@ -16,7 +16,6 @@ import { useFileStore } from "./stores/fileStore";
 import { useConfigStore } from "./stores/configStore";
 import { useWSStore } from "./stores/wsStore";
 import { useCustomTemplateStore } from "./stores/customTemplateStore";
-import { useDebugStore } from "./stores/debugStore";
 import { localServer } from "./services/server";
 
 import Header from "./components/Header";
@@ -32,7 +31,6 @@ import ConfigPanel from "./components/panels/main/ConfigPanel";
 import AIHistoryPanel from "./components/panels/main/AIHistoryPanel";
 import { LocalFileListPanel } from "./components/panels/main/LocalFileListPanel";
 import ErrorPanel from "./components/panels/main/ErrorPanel";
-import RecognitionHistoryPanel from "./components/panels/main/RecognitionHistoryPanel";
 import ToolbarPanel from "./components/panels/main/ToolbarPanel";
 import { LoggerPanel } from "./components/panels/tools/LoggerPanel";
 import { parsePythonFile, convertToFlowData } from "./core/parser";
@@ -107,9 +105,6 @@ const GlobalListener = memo(() => {
 
 /**主程序 */
 function App() {
-  // 获取调试模式状态
-  const debugMode = useDebugStore((state) => state.debugMode);
-
   // 处理文件拖拽
   const handleFileDrop = useCallback(async (e: DragEvent) => {
     e.preventDefault();
@@ -305,8 +300,6 @@ function App() {
               <ToolPanel.Add />
               <ToolPanel.Global />
               <SearchPanel />
-              {debugMode && <ToolPanel.Debug />}
-              {debugMode && <RecognitionHistoryPanel />}
               <ToolPanel.Layout />
               <ErrorPanel />
               <LoggerPanel />

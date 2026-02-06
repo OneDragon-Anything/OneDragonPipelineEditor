@@ -4,11 +4,9 @@ import { useReactFlow } from "@xyflow/react";
 import classNames from "classnames";
 
 import style from "../../../../styles/nodes.module.less";
-import debugStyle from "../../../../styles/DebugPanel.module.less";
 import type { PipelineNodeDataType } from "../../../../stores/flow";
 import { useFlowStore } from "../../../../stores/flow";
 import { useConfigStore } from "../../../../stores/configStore";
-import { useDebugStore } from "../../../../stores/debugStore";
 import { NodeTypeEnum } from "../constants";
 import { ModernContent } from "./ModernContent";
 import { useShallow } from "zustand/shallow";
@@ -40,15 +38,6 @@ export function PipelineNode(props: NodeProps<PNodeData>) {
     }))
   );
   const edges = useFlowStore((state) => state.edges);
-
-  // 获取调试状态
-  const debugMode = useDebugStore((state) => state.debugMode);
-  const executedNodes = useDebugStore((state) => state.executedNodes);
-  const currentNode = useDebugStore((state) => state.currentNode);
-  const recognitionTargetNodeId = useDebugStore(
-    (state) => state.recognitionTargetNodeId
-  );
-  const executionHistory = useDebugStore((state) => state.executionHistory);
 
   // 计算是否与选中元素相关联
   const isRelated = useMemo(() => {
@@ -108,35 +97,10 @@ export function PipelineNode(props: NodeProps<PNodeData>) {
         [style["node-selected"]]: props.selected,
         [style["modern-node"]]: nodeStyle === "modern",
         [style["minimal-node"]]: nodeStyle === "minimal",
-        // 调试相关样式
-        [debugStyle["debug-node-executed"]]:
-          debugMode && executedNodes.has(props.id),
-        [debugStyle["debug-node-executing"]]:
-          debugMode && currentNode === props.id,
-        // 正在被识别的节点（优先级高于执行中）
-        [debugStyle["debug-node-recognizing"]]:
-          debugMode && recognitionTargetNodeId === props.id,
-        [debugStyle["debug-node-failed"]]:
-          debugMode &&
-          (() => {
-            // 查找此节点最后一次执行记录，判断是否失败
-            const records = executionHistory.filter(
-              (r) => r.nodeId === props.id
-            );
-            if (records.length === 0) return false;
-            const lastRecord = records[records.length - 1];
-            return lastRecord.status === "failed";
-          })(),
       }),
     [
       props.selected,
       nodeStyle,
-      debugMode,
-      executedNodes,
-      currentNode,
-      recognitionTargetNodeId,
-      executionHistory,
-      props.id,
     ]
   );
 
