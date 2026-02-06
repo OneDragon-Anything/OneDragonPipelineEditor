@@ -30,19 +30,11 @@ type LogConfig struct {
 	PushToClient bool   `mapstructure:"push_to_client" json:"push_to_client"`
 }
 
-// MaaFramework配置
-type MaaFWConfig struct {
-	Enabled     bool   `mapstructure:"enabled" json:"enabled"`
-	LibDir      string `mapstructure:"lib_dir" json:"lib_dir"`
-	ResourceDir string `mapstructure:"resource_dir" json:"resource_dir"`
-}
-
 // 全局配置
 type Config struct {
 	Server ServerConfig `mapstructure:"server" json:"server"`
 	File   FileConfig   `mapstructure:"file" json:"file"`
 	Log    LogConfig    `mapstructure:"log" json:"log"`
-	MaaFW  MaaFWConfig  `mapstructure:"maafw" json:"maafw"`
 }
 
 // 全局单例
@@ -111,11 +103,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("log.level", "INFO")
 	v.SetDefault("log.dir", paths.GetLogDir())
 	v.SetDefault("log.push_to_client", true)
-
-	// MaaFramework 配置
-	v.SetDefault("maafw.enabled", false)
-	v.SetDefault("maafw.lib_dir", "")
-	v.SetDefault("maafw.resource_dir", "")
 }
 
 // 规范化配置路径
@@ -205,16 +192,4 @@ func (c *Config) Save() error {
 	}
 
 	return nil
-}
-
-// 设置 MaaFramework lib 目录并保存
-func (c *Config) SetMaaFWLibDir(libDir string) error {
-	c.MaaFW.LibDir = libDir
-	return c.Save()
-}
-
-// 设置 MaaFramework 资源目录并保存
-func (c *Config) SetMaaFWResourceDir(resourceDir string) error {
-	c.MaaFW.ResourceDir = resourceDir
-	return c.Save()
 }

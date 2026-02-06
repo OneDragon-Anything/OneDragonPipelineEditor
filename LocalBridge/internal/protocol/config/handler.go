@@ -128,22 +128,6 @@ func (h *ConfigHandler) handleSetConfig(conn *server.Connection, msg models.Mess
 		}
 	}
 
-	// 更新 MaaFramework 配置
-	if maafwConfig, ok := dataMap["maafw"].(map[string]interface{}); ok {
-		if enabled, ok := maafwConfig["enabled"].(bool); ok {
-			cfg.MaaFW.Enabled = enabled
-			updated = true
-		}
-		if libDir, ok := maafwConfig["lib_dir"].(string); ok {
-			cfg.MaaFW.LibDir = libDir
-			updated = true
-		}
-		if resourceDir, ok := maafwConfig["resource_dir"].(string); ok {
-			cfg.MaaFW.ResourceDir = resourceDir
-			updated = true
-		}
-	}
-
 	if !updated {
 		h.sendConfigError(conn, "NO_CHANGES", "没有有效的配置更新", nil)
 		return

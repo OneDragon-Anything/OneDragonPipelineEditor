@@ -17,14 +17,10 @@ import (
 	"github.com/kqcoxn/MaaPipelineEditor/LocalBridge/internal/config"
 	"github.com/kqcoxn/MaaPipelineEditor/LocalBridge/internal/eventbus"
 	"github.com/kqcoxn/MaaPipelineEditor/LocalBridge/internal/logger"
-	"github.com/kqcoxn/MaaPipelineEditor/LocalBridge/internal/mfw"
 	"github.com/kqcoxn/MaaPipelineEditor/LocalBridge/internal/paths"
 	configProtocol "github.com/kqcoxn/MaaPipelineEditor/LocalBridge/internal/protocol/config"
-	debugProtocol "github.com/kqcoxn/MaaPipelineEditor/LocalBridge/internal/protocol/debug"
 	fileProtocol "github.com/kqcoxn/MaaPipelineEditor/LocalBridge/internal/protocol/file"
-	mfwProtocol "github.com/kqcoxn/MaaPipelineEditor/LocalBridge/internal/protocol/mfw"
 	resourceProtocol "github.com/kqcoxn/MaaPipelineEditor/LocalBridge/internal/protocol/resource"
-	utilityProtocol "github.com/kqcoxn/MaaPipelineEditor/LocalBridge/internal/protocol/utility"
 	"github.com/kqcoxn/MaaPipelineEditor/LocalBridge/internal/router"
 	"github.com/kqcoxn/MaaPipelineEditor/LocalBridge/internal/server"
 	fileService "github.com/kqcoxn/MaaPipelineEditor/LocalBridge/internal/service/file"
@@ -69,46 +65,6 @@ var configOpenCmd = &cobra.Command{
 	Run:   openConfig,
 }
 
-var setLibDirCmd = &cobra.Command{
-	Use:   "set-lib [path]",
-	Short: "设置 MaaFramework lib 路径",
-	Long: `设置 MaaFramework Release 包的 lib 目录路径。
-
-路径说明:
-  该路径应指向 MaaFramework Release 包解压后的 bin 文件夹，
-  其中应包含 MaaFramework.dll/.so 等库文件。
-
-示例:
-  Windows: C:\MaaFramework\bin
-  Linux:   /opt/maaframework/bin
-  macOS:   /Applications/MaaFramework/bin`,
-	Args: cobra.MaximumNArgs(1),
-	Run:  setLibDir,
-}
-
-var setResourceDirCmd = &cobra.Command{
-	Use:   "set-resource [path]",
-	Short: "设置 OCR 资源路径",
-	Long: `设置 OCR 顶层资源路径（model 文件夹所在目录）。
-
-路径说明:
-  该路径应指向包含 model 文件夹的目录，
-  model 文件夹内应包含 OCR 模型文件（如 ocr 子目录）。
-
-示例:
-  Windows: C:\MaaResource
-  Linux:   /opt/maa-resource
-  macOS:   /Applications/MaaResource
-
-目录结构示例:
-  MaaResource/
-  └── model/
-      └── ocr/
-          └── ...`,
-	Args: cobra.MaximumNArgs(1),
-	Run:  setResourceDir,
-}
-
 var openLogDirCmd = &cobra.Command{
 	Use:   "open-log",
 	Short: "打开后端日志文件夹",
@@ -149,8 +105,6 @@ func init() {
 
 	// config 子命令
 	configCmd.AddCommand(configOpenCmd)
-	configCmd.AddCommand(setLibDirCmd)
-	configCmd.AddCommand(setResourceDirCmd)
 	configCmd.AddCommand(openLogDirCmd)
 
 	configCmd.Flags().StringVar(&configPath, "config", "", "配置文件路径")
@@ -218,14 +172,6 @@ func runServer(cmd *cobra.Command, args []string) {
 	logger.Info("Main", "运行目录: %s", cfg.File.Root)
 	logger.Debug("Main", "监听端口: %d", cfg.Server.Port)
 
-	// 检查 MaaFramework 配置
-	if cfg.MaaFW.Enabled {
-		if err := checkAndPromptMaaFWConfig(cfg); err != nil {
-			logger.Error("Main", "MaaFramework 配置检查失败: %v", err)
-			os.Exit(1)
-		}
-	}
-
 	// 创建事件总线
 	eventBus := eventbus.GetGlobalBus()
 
@@ -239,25 +185,6 @@ func runServer(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logger.Error("Main", "创建文件服务失败: %v", err)
 		os.Exit(1)
-	}
-
-	// 创建 MFW 服务
-	mfwSvc := mfw.NewService()
-	// 初始化 MFW 服务
-	if err := mfwSvc.Initialize(); err != nil {
-		// 检查是否是库版本不匹配错误
-		if strings.Contains(err.Error(), "库版本不匹配") || strings.Contains(err.Error(), "panic") {
-			logger.Error("Main", "MFW 服务初始化失败: %v", err)
-			logger.Error("Main", "程序将退出，请更新 MaaFramework 后重启")
-			os.Exit(1)
-		}
-		logger.Warn("Main", "MFW 服务初始化失败: %v (当前状态仅可使用文件管理功能)", err)
-	} else {
-		logger.Debug("Main", "MFW 服务初始化完成")
-		// 检查 OCR 资源路径是否配置
-		if cfg.MaaFW.ResourceDir == "" {
-			logger.Warn("Main", "OCR 资源路径未配置，原生 OCR 功能将不可用（但仍可用前段 OCR，若无需求无需配置）。请运行 'mpelb config set-resource' 进行配置")
-		}
 	}
 
 	// 启动文件服务
@@ -333,15 +260,6 @@ func runServer(cmd *cobra.Command, args []string) {
 			}
 		}
 
-		// 重载MFW服务（仅当启用且配置变化时）
-		if mfwSvc != nil && cfg.MaaFW.Enabled {
-			if err := mfwSvc.Reload(); err != nil {
-				logger.Error("Main", "MFW服务重载失败: %v", err)
-			} else {
-				logger.Info("Main", "MFW服务重载完成")
-			}
-		}
-
 		logger.Info("Main", "所有服务重载完成")
 	})
 
@@ -352,21 +270,9 @@ func runServer(cmd *cobra.Command, args []string) {
 	fileHandler := fileProtocol.NewHandler(fileSvc, eventBus, wsServer, cfg.File.Root)
 	rt.RegisterHandler(fileHandler)
 
-	// 注册 MFW 协议处理器
-	mfwHandler := mfwProtocol.NewMFWHandler(mfwSvc)
-	rt.RegisterHandler(mfwHandler)
-
-	// 注册 Utility 协议处理器
-	utilityHandler := utilityProtocol.NewUtilityHandler(mfwSvc, cfg.File.Root)
-	rt.RegisterHandler(utilityHandler)
-
 	// 注册 Config 协议处理器
 	configHandler := configProtocol.NewConfigHandler()
 	rt.RegisterHandler(configHandler)
-
-	// 注册 Debug 协议处理器
-	debugHandler := debugProtocol.NewDebugHandlerV2(mfwSvc)
-	rt.RegisterHandler(debugHandler)
 
 	// 注册 Resource 协议处理器
 	resourceHandler := resourceProtocol.NewHandler(resSvc, eventBus, wsServer, cfg.File.Root)
@@ -393,11 +299,6 @@ func runServer(cmd *cobra.Command, args []string) {
 
 	wsServer.Stop()
 	fileSvc.Stop()
-
-	// 关闭 MFW 服务
-	if err := mfwSvc.Shutdown(); err != nil {
-		logger.Error("Main", "MFW 服务关闭失败: %v", err)
-	}
 
 	logger.Info("Main", "Local Bridge 已退出")
 }
@@ -455,114 +356,6 @@ func openConfig(cmd *cobra.Command, args []string) {
 }
 
 // 设置 MaaFramework lib 路径
-func setLibDir(cmd *cobra.Command, args []string) {
-	// 初始化路径系统
-	paths.Init()
-
-	// 加载配置
-	cfg, err := config.Load(configPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "加载配置失败: %v\n", err)
-		os.Exit(1)
-	}
-
-	var libDir string
-	if len(args) > 0 {
-		libDir = args[0]
-	} else {
-		// 交互式输入
-		libDir = promptForPath(
-			"📁 MaaFramework lib 路径",
-			"该路径应指向 MaaFramework Release 包解压后的 bin 文件夹\n"+
-				"   其中应包含 MaaFramework.dll/.so 等库文件\n"+
-				"   示例: C:\\MaaFramework\\bin 或 /opt/maaframework/bin",
-			cfg.MaaFW.LibDir,
-		)
-	}
-
-	// 验证路径
-	if libDir != "" {
-		absPath, err := filepath.Abs(libDir)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "错误: 无法解析路径: %v\n", err)
-			os.Exit(1)
-		}
-		libDir = absPath
-
-		if _, err := os.Stat(libDir); os.IsNotExist(err) {
-			fmt.Fprintf(os.Stderr, "⚠️  警告: 指定的路径不存在: %s\n", libDir)
-		}
-
-		// 设置路径后自动启用 MaaFramework
-		cfg.MaaFW.Enabled = true
-	}
-
-	if err := cfg.SetMaaFWLibDir(libDir); err != nil {
-		fmt.Fprintf(os.Stderr, "保存配置失败: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("✅ MaaFramework lib 路径已设置为: %s\n", libDir)
-	if libDir != "" {
-		fmt.Println("✅ 已设置 MaaFramework 自启用")
-	}
-}
-
-// 设置 OCR 资源路径
-func setResourceDir(cmd *cobra.Command, args []string) {
-	// 初始化路径系统
-	paths.Init()
-
-	// 加载配置
-	cfg, err := config.Load(configPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "加载配置失败: %v\n", err)
-		os.Exit(1)
-	}
-
-	var resourceDir string
-	if len(args) > 0 {
-		resourceDir = args[0]
-	} else {
-		// 交互式输入
-		resourceDir = promptForPath(
-			"📁 OCR 资源路径",
-			"model 文件夹所在目录，目录结构应为:\n"+
-				"   <路径>/model/ocr/...\n"+
-				"   示例: D:assets/resource/base"+
-				"   （注意是 model 文件夹所在的根目录，而不是 ocr 文件夹的目录）",
-			cfg.MaaFW.ResourceDir,
-		)
-	}
-
-	// 验证路径
-	if resourceDir != "" {
-		absPath, err := filepath.Abs(resourceDir)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "错误: 无法解析路径: %v\n", err)
-			os.Exit(1)
-		}
-		resourceDir = absPath
-
-		if _, err := os.Stat(resourceDir); os.IsNotExist(err) {
-			fmt.Fprintf(os.Stderr, "⚠️  警告: 指定的路径不存在: %s\n", resourceDir)
-		}
-
-		// 设置资源路径时自动启用 MaaFramework
-		cfg.MaaFW.Enabled = true
-	}
-
-	if err := cfg.SetMaaFWResourceDir(resourceDir); err != nil {
-		fmt.Fprintf(os.Stderr, "保存配置失败: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("✅ OCR 资源路径已设置为: %s\n", resourceDir)
-	if resourceDir != "" {
-		fmt.Println("✅ MaaFramework 已自动启用")
-	}
-}
-
 // 交互式提示输入路径
 func promptForPath(title, hint, currentValue string) string {
 	fmt.Println()
@@ -637,50 +430,6 @@ func openLogDir(cmd *cobra.Command, args []string) {
 	}
 
 	fmt.Println("✅ 日志文件夹已在文件管理器中打开")
-}
-
-// 检查并提示 MaaFramework 配置
-func checkAndPromptMaaFWConfig(cfg *config.Config) error {
-	if cfg.MaaFW.LibDir != "" {
-		return nil
-	}
-
-	// lib_dir 未配置
-	fmt.Println()
-	fmt.Println("══════════════════════════════════════════════════")
-	fmt.Println("🔧 MaaFramework 初始配置")
-	fmt.Println("══════════════════════════════════════════════════")
-	fmt.Println("检测到 MaaFramework 已启用但尚未配置路径，请进行初始设置。")
-
-	libDir := promptForPath(
-		"📁 MaaFramework lib 路径",
-		"MaaFramework Release 包解压后的 bin 文件夹路径\n"+
-			"   其中应包含 MaaFramework.dll/.so 等库文件\n"+
-			"   示例: C:\\MaaFramework\\bin 或 /opt/maaframework/bin",
-		"",
-	)
-
-	if libDir != "" {
-		absPath, err := filepath.Abs(libDir)
-		if err != nil {
-			return fmt.Errorf("解析 lib 路径失败: %w", err)
-		}
-		cfg.MaaFW.LibDir = absPath
-
-		if _, err := os.Stat(absPath); os.IsNotExist(err) {
-			fmt.Printf("⚠️  警告: 指定的路径不存在: %s\n", absPath)
-		}
-
-		if err := cfg.Save(); err != nil {
-			return fmt.Errorf("保存配置失败: %w", err)
-		}
-		fmt.Println()
-		fmt.Println("✅ 配置已保存")
-		fmt.Println("══════════════════════════════════════════════════")
-		fmt.Println()
-	}
-
-	return nil
 }
 
 // GitHub Release 响应结构

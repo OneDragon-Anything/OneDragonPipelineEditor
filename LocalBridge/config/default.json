@@ -11,18 +11,12 @@
       "build"
     ],
     "extensions": [
-      ".json",
-      ".jsonc"
+      ".py"
     ]
   },
   "log": {
     "level": "INFO",
     "dir": "./logs",
     "push_to_client": true
-  },
-  "maafw": {
-    "enabled": false,
-    "lib_dir": "",
-    "resource_dir": ""
   }
 }
