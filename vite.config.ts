@@ -4,7 +4,9 @@ import path from "path";
 
 export default defineConfig(({ mode }) => {
   let base = "/stable/";
-  if (mode === "preview") {
+  if (mode === "netlify") {
+    base = "/";
+  } else if (mode === "preview") {
     base = "/editor/";
   } else if (mode === "extremer") {
     base = "./";

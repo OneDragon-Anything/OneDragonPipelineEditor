@@ -9,6 +9,7 @@
     "server": "cd LocalBridge && yarn server",
     "doc": "cd docsite && yarn dev",
     "build": "vite build",
+    "build:netlify": "vite build --mode netlify",
     "build-past": "vite build --mode mfw_5_0",
     "lint": "eslint .",
     "preview": "vite preview",
