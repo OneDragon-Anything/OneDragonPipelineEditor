@@ -21,7 +21,9 @@ export type PositionType = {
 
 // 边属性类型 - OneDragon 风格
 export type EdgeAttributesType = {
-  success?: boolean;                 // 执行结果条件: undefined=默认(成功), false=失败
+  onSuccess?: boolean;               // true = 成功时触发（默认行为，不设置时视为成功）
+  onFailure?: boolean;               // true = 失败时触发
+  // 两者都不设 = 默认（成功）；两者都设 = 成功和失败都触发
   status?: string;                   // 状态值（决定出口 Handle）
 };
 

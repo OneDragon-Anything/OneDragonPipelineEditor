@@ -38,7 +38,8 @@ interface SortableOutputItemProps {
   edges: {
     edgeId: string;
     targetLabel: string;
-    success?: boolean;
+    onSuccess?: boolean;
+    onFailure?: boolean;
   }[];
 }
 
@@ -64,7 +65,9 @@ const SortableOutputItem = memo(({
 
   const getEdgeDisplayText = (edge: typeof edges[0]): string => {
     const parts = [`→ ${edge.targetLabel}`];
-    if (edge.success === false) {
+    if (edge.onSuccess && edge.onFailure) {
+      parts.push("(成功+失败)");
+    } else if (edge.onFailure && !edge.onSuccess) {
       parts.push("(失败)");
     }
     return parts.join(" ");
@@ -308,7 +311,8 @@ export const PipelineEditor = lazy(() =>
         const outputs: {
           handle: string;
           status?: string;
-          success?: boolean;
+          onSuccess?: boolean;
+          onFailure?: boolean;
           targetLabel: string;
           edgeId: string;
         }[] = [];
@@ -330,7 +334,8 @@ export const PipelineEditor = lazy(() =>
             outputs.push({
               handle,
               status,
-              success: edge.attributes?.success as boolean | undefined,
+              onSuccess: edge.attributes?.onSuccess as boolean | undefined,
+              onFailure: edge.attributes?.onFailure as boolean | undefined,
               targetLabel,
               edgeId: edge.id,
             });
@@ -662,7 +667,8 @@ export const PipelineEditor = lazy(() =>
                             edges={edgesForHandle.map((e) => ({
                               edgeId: e.edgeId,
                               targetLabel: e.targetLabel,
-                              success: e.success,
+                              onSuccess: e.onSuccess,
+                              onFailure: e.onFailure,
                             }))}
                           />
                         );

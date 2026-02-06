@@ -41,8 +41,12 @@ export interface FlowEdgeData {
   sourceHandle?: string;    // "default" 或 "status:xxx"
   target: string;
   attributes?: {
-    success?: boolean;      // undefined=默认, true=成功, false=失败
+    onSuccess?: boolean;    // true=成功时触发
+    onFailure?: boolean;    // true=失败时触发
+    // 两者都不设=默认(成功)
+    // 两者都设=生成两个 @node_from
     status?: string;        // 状态值
+    success?: boolean;      // 兼容旧格式
   };
 }
 
@@ -190,7 +194,11 @@ function generateMethod(
  * - "default" = 无状态条件
  * - "status:xxx" = 指定状态值
  *
- * success/fail 从 attributes 读取
+ * onSuccess/onFailure 从 attributes 读取，支持多选：
+ * - 两个都不设 = 默认（成功），生成一个 @node_from
+ * - onSuccess=true = 成功时触发，生成一个 @node_from
+ * - onFailure=true = 失败时触发，生成一个 @node_from(success=False)
+ * - 两个都设 = 生成两个 @node_from（一个默认，一个 success=False）
  */
 function buildNodeFromMap(
   nodes: FlowNodeData[],
@@ -212,30 +220,53 @@ function buildNodeFromMap(
     const sourceHandle = edge.sourceHandle || "default";
     const attrs = edge.attributes || {};
 
-    const nodeFrom: NodeFromParams = {
-      from_name: sourceLabel,
-    };
-
-    // 从 sourceHandle 解析 status
+    // 解析 status
+    let status: string | undefined;
     if (sourceHandle.startsWith("status:")) {
-      nodeFrom.status = sourceHandle.replace("status:", "");
-    }
-    // 兼容旧格式 (status in attributes)
-    else if (sourceHandle === "status" && attrs.status) {
-      nodeFrom.status = attrs.status;
+      status = sourceHandle.replace("status:", "");
+    } else if (sourceHandle === "status" && attrs.status) {
+      status = attrs.status;
     }
 
-    // success/fail 从 attributes 读取
-    if (attrs.success === true) {
-      nodeFrom.success = true;
-    } else if (attrs.success === false) {
-      nodeFrom.success = false;
+    // 读取 onSuccess/onFailure，兼容旧的 success 字段
+    let onSuccess = attrs.onSuccess;
+    let onFailure = attrs.onFailure;
+
+    // 兼容旧格式: success 字段
+    if (onSuccess === undefined && onFailure === undefined && attrs.success !== undefined) {
+      if (attrs.success === false) {
+        onFailure = true;
+      } else {
+        onSuccess = true;
+      }
     }
 
     if (!nodeFromMap.has(targetId)) {
       nodeFromMap.set(targetId, []);
     }
-    nodeFromMap.get(targetId)!.push(nodeFrom);
+
+    // 根据勾选情况生成 nodeFrom 条目
+    if (onSuccess && onFailure) {
+      // 两个都勾选 → 生成两个 @node_from
+      const nodeFromSuccess: NodeFromParams = { from_name: sourceLabel };
+      if (status) nodeFromSuccess.status = status;
+      // success 不设置（默认=成功）
+      nodeFromMap.get(targetId)!.push(nodeFromSuccess);
+
+      const nodeFromFailure: NodeFromParams = { from_name: sourceLabel, success: false };
+      if (status) nodeFromFailure.status = status;
+      nodeFromMap.get(targetId)!.push(nodeFromFailure);
+    } else if (onFailure) {
+      // 只勾失败
+      const nodeFrom: NodeFromParams = { from_name: sourceLabel, success: false };
+      if (status) nodeFrom.status = status;
+      nodeFromMap.get(targetId)!.push(nodeFrom);
+    } else {
+      // 默认或只勾成功 → 生成一个默认的 @node_from
+      const nodeFrom: NodeFromParams = { from_name: sourceLabel };
+      if (status) nodeFrom.status = status;
+      nodeFromMap.get(targetId)!.push(nodeFrom);
+    }
   }
 
   return nodeFromMap;

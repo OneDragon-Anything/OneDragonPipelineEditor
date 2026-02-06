@@ -508,15 +508,23 @@ export function convertToFlowData(parsed: ParsedOneDragonClass): {
         const hasStatus = nodeFrom.status !== undefined && nodeFrom.status !== "";
         const sourceHandle = hasStatus ? `status:${nodeFrom.status}` : "default";
 
-        // success/fail 存储在 attributes 中
-        const successVal = nodeFrom.success;
-        const successKey = successVal === true ? "_success" : (successVal === false ? "_fail" : "");
-
-        // edgeKey 需要包含 success 状态来区分同一出口的多条边
-        const edgeKey = `${sourceId}_${targetId}_${sourceHandle}${successKey}`;
+        // 使用不含 success 的 key 来合并同一出口的成功/失败边
+        const edgeKey = `${sourceId}_${targetId}_${sourceHandle}`;
 
         if (!edgeMap.has(edgeKey)) {
-          // 创建新边
+          // 创建新边，根据 nodeFrom.success 设置 onSuccess/onFailure
+          const attrs: any = {};
+          if (nodeFrom.status !== undefined) {
+            attrs.status = nodeFrom.status;
+          }
+
+          if (nodeFrom.success === false) {
+            attrs.onFailure = true;
+          } else {
+            // undefined 或 true 都视为成功
+            attrs.onSuccess = true;
+          }
+
           edgeMap.set(edgeKey, {
             id: `edge_${edgeKey}`,
             source: sourceId,
@@ -524,11 +532,18 @@ export function convertToFlowData(parsed: ParsedOneDragonClass): {
             target: targetId,
             targetHandle: "target",
             type: "marked",
-            attributes: {
-              success: nodeFrom.success,
-              status: nodeFrom.status,
-            },
+            attributes: attrs,
           });
+        } else {
+          // 已有同一出口的边，合并 onSuccess/onFailure
+          const existing = edgeMap.get(edgeKey)!;
+          if (!existing.attributes) existing.attributes = {};
+
+          if (nodeFrom.success === false) {
+            existing.attributes.onFailure = true;
+          } else {
+            existing.attributes.onSuccess = true;
+          }
         }
       }
     }

@@ -22,7 +22,8 @@ import type { HandleDirection } from "./nodes";
 // success: undefined/true=成功（默认）, false=失败
 function getEdgeDisplayLabel(
   handle: string | undefined,
-  success?: boolean
+  onSuccess?: boolean,
+  onFailure?: boolean
 ): string {
   const parts: string[] = [];
   
@@ -30,17 +31,20 @@ function getEdgeDisplayLabel(
   if (handle && handle.startsWith("status:")) {
     const status = handle.replace("status:", "");
     if (status) {
-      parts.push(`状态: ${status}`);
+      parts.push(status);
     }
   }
   
-  // 只有失败时才特别标注（因为默认就是成功）
-  if (success === false) {
+  // 执行结果条件：成功不标注，失败标注
+  if (onSuccess && onFailure) {
+    parts.push("(成功+失败)");
+  } else if (onFailure && !onSuccess) {
     parts.push("(失败)");
   }
+  // 只勾成功或都不勾 = 默认（成功），不额外标注
   
   if (parts.length === 0) {
-    return "默认";
+    return "";
   }
   
   return parts.join(" ");
@@ -492,9 +496,10 @@ function MarkedEdge(props: EdgeProps) {
   // 生成条件标签文字
   const conditionLabel = useMemo(() => {
     const handle = String(edge?.sourceHandle || "default");
-    const success = edge?.attributes?.success as boolean | undefined;
-    return getEdgeDisplayLabel(handle, success);
-  }, [edge?.sourceHandle, edge?.attributes?.success]);
+    const onSuccess = edge?.attributes?.onSuccess as boolean | undefined;
+    const onFailure = edge?.attributes?.onFailure as boolean | undefined;
+    return getEdgeDisplayLabel(handle, onSuccess, onFailure);
+  }, [edge?.sourceHandle, edge?.attributes?.onSuccess, edge?.attributes?.onFailure]);
 
   return (
     <g style={opacityStyle}>

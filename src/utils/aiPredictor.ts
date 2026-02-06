@@ -126,8 +126,8 @@ export async function collectNodeContext(
 
     // 确定连接类型 - OneDragon 风格
     let connectionType: "next" | "jump_back" | "on_error" = "next";
-    // success=false 表示失败条件
-    if (edge.attributes?.success === false) {
+    // onFailure 表示失败条件
+    if (edge.attributes?.onFailure && !edge.attributes?.onSuccess) {
       connectionType = "on_error";
     } else if (edge.targetHandle === TargetHandleTypeEnum.JumpBack) {
       connectionType = "jump_back";

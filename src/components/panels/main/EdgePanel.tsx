@@ -16,19 +16,22 @@ import { DraggablePanel } from "../common/DraggablePanel";
 
 /**
  * 边条件：
- * - success: undefined (默认=成功) | true (成功) | false (失败) — 存储在 attributes 中
+ * - onSuccess: 是否在成功时触发
+ * - onFailure: 是否在失败时触发
  * - status: undefined (无) | string (状态值) — 决定 sourceHandle
  *
  * sourceHandle 编码格式（只基于 status）:
  * - "default" = status=undefined（无状态条件）
  * - "status:xxx" = status=xxx（指定状态值）
  * 
- * 注意：在框架中，默认（不选/success=undefined）就是成功！
- * success=false 明确表示"失败时"
+ * 注意：在框架中，默认（两个都不勾选）= 成功！
+ * 两个都勾选 = 成功和失败都触发（生成两个 @node_from）
  */
 type EdgeConditionState = {
-  success?: boolean;  // undefined/true=成功, false=失败（存储在 attributes）
-  status?: string;    // undefined/空=无状态, 有值=特定状态（决定 sourceHandle）
+  onSuccess?: boolean;  // true=成功时触发
+  onFailure?: boolean;  // true=失败时触发
+  // 两个都不设 = 默认（成功）
+  status?: string;      // undefined/空=无状态, 有值=特定状态（决定 sourceHandle）
 };
 
 // 从 sourceHandle 和 attributes 解析条件状态
@@ -47,10 +50,11 @@ const parseEdgeCondition = (edge: EdgeType): EdgeConditionState => {
     status = String(attrs.status);
   }
 
-  // success 从 attributes 读取
-  const success = attrs.success as boolean | undefined;
+  // onSuccess/onFailure 从 attributes 读取
+  const onSuccess = attrs.onSuccess as boolean | undefined;
+  const onFailure = attrs.onFailure as boolean | undefined;
 
-  return { success, status };
+  return { onSuccess, onFailure, status };
 };
 
 // 生成 sourceHandle 字符串（只基于 status）
@@ -62,20 +66,23 @@ const buildSourceHandle = (state: EdgeConditionState): string => {
 
 // 生成条件显示文本
 const getConditionDisplayText = (state: EdgeConditionState): string => {
-  const { success, status } = state;
+  const { onSuccess, onFailure, status } = state;
   const parts: string[] = [];
 
   // 状态条件
   if (status !== undefined && status !== "") {
-    parts.push(`状态: ${status}`);
+    parts.push(status);
   } else {
     parts.push("默认出口");
   }
 
-  // 失败时才特别标注（因为默认就是成功）
-  if (success === false) {
+  // 执行结果条件
+  if (onSuccess && onFailure) {
+    parts.push("(成功+失败)");
+  } else if (onFailure && !onSuccess) {
     parts.push("(失败)");
   }
+  // 只勾成功或都不勾 = 默认（成功），不额外标注
 
   return parts.join(" ");
 };
@@ -93,17 +100,16 @@ const EdgeInfoElem = memo(
     conditionState: EdgeConditionState;
     onConditionChange: (state: EdgeConditionState) => void;
   }) => {
-    const { success, status } = conditionState;
+    const { onSuccess, onFailure, status } = conditionState;
 
-    // 失败勾选变化（默认=成功，只需要一个失败复选框）
+    // 成功复选框变化
+    const handleSuccessChange = (checked: boolean) => {
+      onConditionChange({ ...conditionState, onSuccess: checked || undefined });
+    };
+
+    // 失败复选框变化
     const handleFailChange = (checked: boolean) => {
-      if (checked) {
-        // 勾选失败
-        onConditionChange({ ...conditionState, success: false });
-      } else {
-        // 取消失败 -> 默认（成功）
-        onConditionChange({ ...conditionState, success: undefined });
-      }
+      onConditionChange({ ...conditionState, onFailure: checked || undefined });
     };
 
     // 状态值变化
@@ -146,21 +152,29 @@ const EdgeInfoElem = memo(
             <span className={style.label}>执行结果</span>
             <span className={style.content}>
               <Checkbox
-                checked={success === false}
+                checked={!!onSuccess}
+                onChange={(e) => handleSuccessChange(e.target.checked)}
+              >
+                <span className={style["condition-success"]}>成功时</span>
+              </Checkbox>
+              <Checkbox
+                checked={!!onFailure}
                 onChange={(e) => handleFailChange(e.target.checked)}
               >
                 <span className={style["condition-fail"]}>失败时</span>
               </Checkbox>
-              <span className={style.hint2}>（不勾选 = 成功时）</span>
+              <span className={style.hint2}>（都不勾 = 默认成功）</span>
             </span>
           </div>
         </div>
         <div className={style.hint}>
           <IconFont name="icon-xiaohongshubiaoti" size={14} />
           <span>
-            "状态值" 和 "失败时" 可以组合使用。
+            "状态值" 和 "执行结果" 可以组合使用。
             <br />
-            例如：状态值"1" + 勾选"失败时" = 失败且状态为1时触发
+            同时勾选成功和失败 = 无论结果如何都触发。
+            <br />
+            不勾选 = 与只勾"成功"等效（框架默认行为）。
           </span>
         </div>
       </>
@@ -230,7 +244,8 @@ function EdgePanel() {
           sourceHandle: newSourceHandle,
           attributes: {
             ...currentEdge.attributes,
-            success: newState.success,
+            onSuccess: newState.onSuccess,
+            onFailure: newState.onFailure,
             status: newState.status,
           },
         } as EdgeType,
