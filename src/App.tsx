@@ -50,54 +50,6 @@ import {
   wailsLog,
 } from "./utils/wailsBridge";
 
-// 轮询提醒
-let isShowStarRemind = false;
-function starRemind() {
-  isShowStarRemind = true;
-  const key = `open${Date.now()}`;
-  const operations = (
-    <Space>
-      <Button
-        type="primary"
-        onClick={() => {
-          window.open("https://github.com/kqcoxn/OneDragonPipelineEditor");
-          localStorage.setItem("mpe_stared", "true");
-          notification.destroy();
-        }}
-      >
-        这就去点！
-      </Button>
-      <Button
-        onClick={() => {
-          isShowStarRemind = false;
-          notification.destroy();
-        }}
-      >
-        稍后提醒
-      </Button>
-      <Button
-        style={{ color: "gray" }}
-        type="dashed"
-        onClick={() => {
-          localStorage.setItem("_mpe_stared", "true");
-          notification.destroy();
-        }}
-      >
-        不再提醒
-      </Button>
-    </Space>
-  );
-  notification.open({
-    title: "来点 Star，秋梨膏！",
-    description:
-      "如果 OneDragonPipelineEditor 对您有帮助，可以为项目点一个免费的 Star⭐ 吗 QAQ",
-    actions: operations,
-    key,
-    duration: 0,
-    closeIcon: false,
-  });
-}
-
 // 全局监听
 const GlobalListener = memo(() => {
   return null;
@@ -252,15 +204,6 @@ function App() {
       if (wsAutoConnect || urlParams.linkLb) {
         localServer.connect();
       }
-    }
-
-    // Star定时提醒
-    if (localStorage.getItem("_mpe_stared") !== "true") {
-      setInterval(() => {
-        if (!isShowStarRemind) {
-          starRemind();
-        }
-      }, 5 * 60 * 1000);
     }
 
     // 文件拖拽监听
